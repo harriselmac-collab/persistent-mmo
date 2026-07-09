@@ -1,22 +1,20 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useGame } from '../../hooks/useGame';
 import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
+
 import {
   Shield,
   LayoutDashboard,
-  Map,
+  Map as MapIcon,
   Factory,
   Swords,
   LogOut,
   Coins,
   MapPin,
   Flame,
-  Menu,
-  X,
   User as UserIcon,
   Pickaxe,
   Boxes,
@@ -39,10 +37,88 @@ import {
   SkipForward,
   Volume2,
   VolumeX,
+  Compass as CompassIcon,
+  AlertCircle,
+  Sparkles,
+  Cloud,
+  User,
+  X,
+  Bell,
+  Settings,
+  Menu,
+  ChevronRight,
+  BookOpen as BookIcon,
+  HelpCircle,
+  Trophy as TrophyIcon
 } from 'lucide-react';
-import { useMusic, TRACKS } from '../../hooks/useMusic';
+import { useMusic } from '../../hooks/useMusic';
+import { useSFX } from '../../hooks/useSFX';
+import GameWindow from './GameWindow';
 
-// Create a context to share game state across all game panels
+// Import all subpages to render as concurrent windows
+import DashboardPage from './dashboard/page';
+import GatheringPage from './gathering/page';
+import InventoryPage from './inventory/page';
+import HistoryPage from './history/page';
+import IndustrialPage from './industrial/page';
+import MarketplacePage from './marketplace/page';
+import CombatPage from './combat/page';
+import WorldPage from './world/page';
+import PoliticsPage from './politics/page';
+import WarfarePage from './warfare/page';
+import CommunityPage from './community/page';
+import MessengerPage from './messenger/page';
+import MailPage from './mail/page';
+import ContractsPage from './contracts/page';
+import NewspaperPage from './newspaper/page';
+import CalendarPage from './calendar/page';
+import QuestsPage from './quests/page';
+import SeasonsPage from './seasons/page';
+import CompanionPage from './companion/page';
+import DeveloperPage from './developer/page';
+import AdminPage from './admin/page';
+
+interface WindowInstance {
+  id: string;         // Unique ID (route path)
+  type: string;
+  title: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  minimized: boolean;
+  maximized: boolean;
+  zIndex: number;
+  isFocused: boolean;
+}
+
+const getPageComponent = (path: string) => {
+  switch (path) {
+    case '/dashboard': return DashboardPage;
+    case '/gathering': return GatheringPage;
+    case '/inventory': return InventoryPage;
+    case '/history': return HistoryPage;
+    case '/industrial': return IndustrialPage;
+    case '/marketplace': return MarketplacePage;
+    case '/combat': return CombatPage;
+    case '/world': return WorldPage;
+    case '/politics': return PoliticsPage;
+    case '/warfare': return WarfarePage;
+    case '/community': return CommunityPage;
+    case '/messenger': return MessengerPage;
+    case '/mail': return MailPage;
+    case '/contracts': return ContractsPage;
+    case '/newspaper': return NewspaperPage;
+    case '/calendar': return CalendarPage;
+    case '/quests': return QuestsPage;
+    case '/seasons': return SeasonsPage;
+    case '/companion': return CompanionPage;
+    case '/developer': return DeveloperPage;
+    case '/admin': return AdminPage;
+    default: return null;
+  }
+};
+
 const GameContext = createContext<ReturnType<typeof useGame> | null>(null);
 
 export function useGameContext() {
@@ -59,8 +135,186 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const game = useGame(userId);
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const music = useMusic();
+  const sfx = useSFX();
+
+  // Floating RPG feedback text
+  const [floatingTexts, setFloatingTexts] = useState<{ id: string; text: string; colorClass: string; x: number; y: number }[]>([]);
+
+  const triggerFloatingText = (text: string, colorClass: string = 'text-game-gold', x?: number, y?: number) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    const posX = x !== undefined ? x : typeof window !== 'undefined' ? window.innerWidth / 2 + (Math.random() * 60 - 30) : 500;
+    const posY = y !== undefined ? y : typeof window !== 'undefined' ? window.innerHeight / 2 - 120 + (Math.random() * 60 - 30) : 300;
+
+    setFloatingTexts((prev) => [...prev, { id, text, colorClass, x: posX, y: posY }]);
+
+    setTimeout(() => {
+      setFloatingTexts((prev) => prev.filter((item) => item.id !== id));
+    }, 1500);
+  };
+
+  const handleClaimEnergy = async () => {
+    sfx.playClick();
+    const res = await game.claimEnergy();
+    if (res.success) {
+      sfx.playSuccess();
+      triggerFloatingText('+100 Energy EP!', 'text-game-emerald');
+    } else {
+      sfx.playError();
+      triggerFloatingText(res.error || 'Claim Blocked!', 'text-red-500');
+    }
+  };
+
+  // Centralized Window instances state
+  const [windows, setWindows] = useState<WindowInstance[]>([]);
+  const [focusedWindow, setFocusedWindow] = useState<string | null>(null);
+
+  // Map settings
+  const [zoom, setZoom] = useState(1.0);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+
+  // Map Inspector
+  const [inspectedRegionId, setInspectedRegionId] = useState<number | null>(null);
+  const [travelError, setTravelError] = useState<string | null>(null);
+  const [travelSuccess, setTravelSuccess] = useState<string | null>(null);
+
+  // Chat tab state
+  const [chatTab, setChatTab] = useState<'WORLD' | 'KINGDOM' | 'ALLIANCE' | 'SYSTEM'>('WORLD');
+
+  const navItems = [
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'World Map', href: '/map', icon: MapIcon },
+    { name: 'Extraction', href: '/gathering', icon: Pickaxe },
+    { name: 'Inventory', href: '/inventory', icon: Boxes },
+    { name: 'Log Feed', href: '/history', icon: History },
+    { name: 'Industry', href: '/industrial', icon: Factory },
+    { name: 'Exchange', href: '/marketplace', icon: Scale },
+    { name: 'Combat Zone', href: '/combat', icon: Swords },
+    { name: 'Influence', href: '/world', icon: Globe },
+    { name: 'Politics', href: '/politics', icon: Landmark },
+    { name: 'Warfare', href: '/warfare', icon: Flame },
+    { name: 'Guilds', href: '/community', icon: Users },
+    { name: 'Messenger', href: '/messenger', icon: MessageSquare },
+    { name: 'Courier Mail', href: '/mail', icon: Mail },
+    { name: 'Contracts', href: '/contracts', icon: FileText },
+    { name: 'Chronicle Press', href: '/newspaper', icon: BookOpen },
+    { name: 'Calendar', href: '/calendar', icon: Calendar },
+    { name: 'Quests', href: '/quests', icon: Compass },
+    { name: 'Seasons', href: '/seasons', icon: Trophy },
+    { name: 'Companion Link', href: '/companion', icon: Smartphone },
+    { name: 'Dev Center', href: '/developer', icon: Code },
+    { name: 'GM Console', href: '/admin', icon: Shield },
+  ];
+
+  const getWindowTitle = (path: string): string => {
+    const matched = navItems.find((item) => item.href === path);
+    return matched ? matched.name : 'Aegis Kingdoms';
+  };
+
+  const getWindowDefaultSize = (path: string): { width: number; height: number } => {
+    if (typeof window === 'undefined') return { width: 750, height: 550 };
+    const wWidth = window.innerWidth;
+    const wHeight = window.innerHeight;
+
+    switch (path) {
+      case '/dashboard':
+        return { width: Math.round(wWidth * 0.7), height: Math.round(wHeight * 0.75) };
+      case '/inventory':
+        return { width: 900, height: 700 };
+      case '/marketplace':
+        return { width: 1000, height: 750 };
+      case '/combat':
+        return { width: 950, height: 720 };
+      case '/gathering':
+        return { width: 850, height: 650 };
+      default:
+        return { width: 750, height: 550 };
+    }
+  };
+
+  const getNextCascadingPosition = (
+    width: number,
+    height: number,
+    existingWindows: WindowInstance[]
+  ): { x: number; y: number } => {
+    if (typeof window === 'undefined') return { x: 100, y: 100 };
+    const wWidth = window.innerWidth;
+    const wHeight = window.innerHeight;
+
+    const centerX = Math.max(0, Math.round((wWidth - width) / 2));
+    const centerY = Math.max(0, Math.round((wHeight - height) / 2));
+
+    const activeCount = existingWindows.filter((w) => !w.minimized).length;
+    let nextX = centerX + activeCount * 32;
+    let nextY = centerY + activeCount * 32;
+
+    if (nextX + width > wWidth - 40 || nextY + height > wHeight - 40) {
+      nextX = centerX + Math.floor(Math.random() * 20);
+      nextY = centerY + Math.floor(Math.random() * 20);
+    }
+
+    return { x: Math.max(20, nextX), y: Math.max(20, nextY) };
+  };
+
+  // Synchronize URL path on mount & path change
+  useEffect(() => {
+    if (pathname !== '/map' && pathname !== '/') {
+      setWindows((prev) => {
+        const exists = prev.some((w) => w.id === pathname);
+        if (exists) {
+          const maxZ = prev.reduce((max, w) => Math.max(max, w.zIndex), 25);
+          return prev.map((w) => ({
+            ...w,
+            minimized: w.id === pathname ? false : w.minimized,
+            isFocused: w.id === pathname,
+            zIndex: w.id === pathname ? maxZ + 1 : w.zIndex,
+          }));
+        } else {
+          // Open new window
+          const savedPref = localStorage.getItem(`mmo_window_pref_${pathname}`);
+          let prefSize = getWindowDefaultSize(pathname);
+          let prefPos = { x: 0, y: 0 };
+
+          if (savedPref) {
+            try {
+              const parsed = JSON.parse(savedPref);
+              if (parsed && typeof parsed.width === 'number' && typeof parsed.height === 'number') {
+                prefSize = { width: parsed.width, height: parsed.height };
+              }
+              if (parsed && typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+                prefPos = { x: parsed.x, y: parsed.y };
+              }
+            } catch (e) {
+              console.error(e);
+            }
+          }
+
+          if (prefPos.x === 0 && prefPos.y === 0) {
+            prefPos = getNextCascadingPosition(prefSize.width, prefSize.height, prev);
+          }
+
+          const maxZ = prev.reduce((max, w) => Math.max(max, w.zIndex), 25);
+          const newWin: WindowInstance = {
+            id: pathname,
+            type: pathname.replace('/', ''),
+            title: getWindowTitle(pathname),
+            x: prefPos.x,
+            y: prefPos.y,
+            width: prefSize.width,
+            height: prefSize.height,
+            minimized: false,
+            maximized: false,
+            zIndex: maxZ + 1,
+            isFocused: true,
+          };
+          return [...prev.map((w) => ({ ...w, isFocused: false })), newWin];
+        }
+      });
+      setFocusedWindow(pathname);
+    }
+  }, [pathname]);
 
   // Auth Guard
   useEffect(() => {
@@ -72,322 +326,881 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
   if (authLoading || game.loading || !userId) {
     return (
       <div className="relative min-h-screen flex flex-col justify-center items-center bg-zinc-950 text-zinc-100 gap-6 overflow-hidden">
-        {/* RPG Embers Animation Overlay */}
         <div className="rpg-embers-container">
           <div className="rpg-ember" style={{ left: '15%', animationDelay: '0s', animationDuration: '14s' }} />
           <div className="rpg-ember" style={{ left: '35%', animationDelay: '3s', animationDuration: '16s' }} />
           <div className="rpg-ember" style={{ left: '55%', animationDelay: '1s', animationDuration: '20s' }} />
-          <div className="rpg-ember" style={{ left: '75%', animationDelay: '5s', animationDuration: '15s' }} />
         </div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_40%,_rgba(0,0,0,0.85)_100%)] pointer-events-none z-0" />
-
         <div className="relative z-10 flex flex-col items-center gap-6">
           <div className="relative">
             <div className="h-20 w-20 rounded-full border-t-2 border-game-gold border-r-2 border-r-game-gold/30 animate-spin" />
-            <Shield className="h-7 w-7 text-game-gold absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse filter drop-shadow-[0_0_8px_rgba(229,193,88,0.4)]" />
+            <Shield className="h-7 w-7 text-game-gold absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
           </div>
-          <div className="flex flex-col items-center gap-1.5 text-center">
-            <h3 className="text-sm font-bold font-display text-game-gold tracking-widest uppercase filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">Syncing Aegis Terminal</h3>
-            <p className="text-[10px] text-zinc-500 font-serif animate-pulse">Syncing core virtual world databases...</p>
-          </div>
+          <h3 className="text-sm font-bold font-display text-game-gold tracking-widest uppercase">Syncing Aegis Terminal</h3>
         </div>
       </div>
     );
   }
 
-  // Get active region details
   const activeRegion = game.regions.find((r) => r.id === game.profile?.current_region_id);
   const activeCountry = game.countries.find((c) => c.id === activeRegion?.country_id);
+  const ticketsCount = game.inventory.find((item) => item.item_template_id === 3)?.quantity || 0;
 
-  const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'World Map', href: '/map', icon: Map },
-    { name: 'Resource Gathering', href: '/gathering', icon: Pickaxe },
-    { name: 'Backpack Inventory', href: '/inventory', icon: Boxes },
-    { name: 'Activity History', href: '/history', icon: History },
-    { name: 'Industrial Hub', href: '/industrial', icon: Factory },
-    { name: 'Global Marketplace', href: '/marketplace', icon: Scale },
-    { name: 'Combat Zone', href: '/combat', icon: Swords },
-    { name: 'World Dynamics', href: '/world', icon: Globe },
-    { name: 'Nations & Politics', href: '/politics', icon: Landmark },
-    { name: 'Warfare & Logistics', href: '/warfare', icon: Flame },
-    { name: 'Community Hub', href: '/community', icon: Users },
-    { name: 'Aegis Messenger', href: '/messenger', icon: MessageSquare },
-    { name: 'Inbox Mailbox', href: '/mail', icon: Mail },
-    { name: 'Contracts Board', href: '/contracts', icon: FileText },
-    { name: 'Press Newspaper', href: '/newspaper', icon: BookOpen },
-    { name: 'Events Calendar', href: '/calendar', icon: Calendar },
-    { name: 'Quests Log', href: '/quests', icon: Compass },
-    { name: 'Seasons Portal', href: '/seasons', icon: Trophy },
-    { name: 'Companion App', href: '/companion', icon: Smartphone },
-    { name: 'Developer Center', href: '/developer', icon: Code },
-    { name: 'GM Admin Console', href: '/admin', icon: Shield },
+  // Custom named AAA strategy map visual pins
+  const REGION_THEMES: Record<number, { icon: React.ComponentType<any>; color: string; label: string; action: string; path: string }> = {
+    7: { icon: Shield, color: 'text-blue-400', label: 'Frostward Peaks Keep', action: 'Gather Herbs', path: '/gathering' },
+    10: { icon: Landmark, color: 'text-slate-350', label: 'Northgate Kingdom Keep', action: 'Raid Keep', path: '/combat' },
+    3: { icon: Swords, color: 'text-red-500', label: 'Ironhold Clans Citadel', action: 'Enter Arsenal', path: '/industrial' },
+    1: { icon: Shield, color: 'text-game-gold', label: 'Aegis Royal Capital Fortress', action: 'Enter City Hall', path: '/politics' },
+    4: { icon: Globe, color: 'text-cyan-400', label: 'Stormsea Harbour Outpost', action: 'Trade Goods', path: '/marketplace' },
+    5: { icon: Flame, color: 'text-orange-400', label: 'Southern Sultanate Palace', action: 'Visit Vault', path: '/inventory' },
+    8: { icon: Swords, color: 'text-rose-500', label: 'Ancient Ruins Keep', action: 'Enter Dungeon', path: '/combat' },
+    6: { icon: Pickaxe, color: 'text-emerald-500', label: 'Whispering Forest Grove', action: 'Chop Heartwood', path: '/gathering' }
+  };
+
+  // Map panning
+  const handleMapMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+  };
+
+  const handleMapMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    setPan({
+      x: e.clientX - dragStart.current.x,
+      y: e.clientY - dragStart.current.y
+    });
+  };
+
+  const handleMapMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleZoomIn = () => setZoom((z) => Math.min(2.5, z + 0.15));
+  const handleZoomOut = () => setZoom((z) => Math.max(0.65, z - 0.15));
+  const handleZoomReset = () => { setZoom(1.05); setPan({ x: 0, y: 0 }); };
+
+  const handleInspectTravel = async (regionId: number, regionName: string) => {
+    setTravelError(null);
+    setTravelSuccess(null);
+    sfx.playTravel();
+    const res = await game.travel(regionId);
+    if (res.success) {
+      sfx.playSuccess();
+      triggerFloatingText('Transit Sync: SUCCESS!', 'text-game-gold');
+      triggerFloatingText('-20 Energy EP', 'text-red-500', undefined, (typeof window !== 'undefined' ? window.innerHeight / 2 - 80 : 340));
+      setTravelSuccess(`Jump transit completed to ${regionName}.`);
+      setTimeout(() => setTravelSuccess(null), 3000);
+    } else {
+      sfx.playError();
+      triggerFloatingText(res.error || 'Transit Blocked!', 'text-red-500');
+      setTravelError(res.error || 'Failed to travel.');
+    }
+  };
+
+  const handleInspectAction = (path: string) => {
+    handleOpenWindow(path);
+  };
+
+  // Window actions
+  const handleOpenWindow = (path: string) => {
+    sfx.playOpen();
+    setWindows((prev) => {
+      const exists = prev.some((w) => w.id === path);
+      const maxZ = prev.reduce((max, w) => Math.max(max, w.zIndex), 25);
+
+      if (exists) {
+        return prev.map((w) => {
+          if (w.id !== path) return { ...w, isFocused: false };
+          return { ...w, minimized: false, isFocused: true, zIndex: maxZ + 1 };
+        });
+      }
+
+      const savedPref = localStorage.getItem(`mmo_window_pref_${path}`);
+      let prefSize = getWindowDefaultSize(path);
+      let prefPos = { x: 0, y: 0 };
+
+      if (savedPref) {
+        try {
+          const parsed = JSON.parse(savedPref);
+          if (parsed && typeof parsed.width === 'number' && typeof parsed.height === 'number') {
+            prefSize = { width: parsed.width, height: parsed.height };
+          }
+          if (parsed && typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+            prefPos = { x: parsed.x, y: parsed.y };
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      if (prefPos.x === 0 && prefPos.y === 0) {
+        prefPos = getNextCascadingPosition(prefSize.width, prefSize.height, prev);
+      }
+
+      const newWin: WindowInstance = {
+        id: path,
+        type: path.replace('/', ''),
+        title: getWindowTitle(path),
+        x: prefPos.x,
+        y: prefPos.y,
+        width: prefSize.width,
+        height: prefSize.height,
+        minimized: false,
+        maximized: false,
+        zIndex: maxZ + 1,
+        isFocused: true,
+      };
+
+      return [...prev.map((w) => ({ ...w, isFocused: false })), newWin];
+    });
+    setFocusedWindow(path);
+    window.history.pushState(null, '', path);
+  };
+
+  const handleCloseWindow = (id: string) => {
+    sfx.playClose();
+    setWindows((prev) => prev.filter((w) => w.id !== id));
+    if (focusedWindow === id) {
+      const remaining = windows.filter((w) => w.id !== id && !w.minimized);
+      if (remaining.length > 0) {
+        const sorted = [...remaining].sort((a, b) => b.zIndex - a.zIndex);
+        setFocusedWindow(sorted[0].id);
+        window.history.pushState(null, '', sorted[0].id);
+      } else {
+        setFocusedWindow(null);
+        window.history.pushState(null, '', '/map');
+      }
+    }
+  };
+
+  const handleMinimizeWindow = (id: string) => {
+    sfx.playClose();
+    setWindows((prev) =>
+      prev.map((w) => {
+        if (w.id !== id) return w;
+        return { ...w, minimized: true, isFocused: false };
+      })
+    );
+    if (focusedWindow === id) {
+      setFocusedWindow(null);
+      window.history.pushState(null, '', '/map');
+    }
+  };
+
+  const handleMaximizeWindow = (id: string) => {
+    sfx.playOpen();
+    setWindows((prev) =>
+      prev.map((w) => {
+        if (w.id !== id) return w;
+        return { ...w, maximized: !w.maximized };
+      })
+    );
+  };
+
+  const handleFocusWindow = (id: string) => {
+    sfx.playClick();
+    setWindows((prev) => {
+      const maxZ = prev.reduce((max, w) => Math.max(max, w.zIndex), 25);
+      return prev.map((w) => {
+        if (w.id !== id) return { ...w, isFocused: false };
+        return { ...w, isFocused: true, zIndex: maxZ + 1 };
+      });
+    });
+    setFocusedWindow(id);
+    window.history.pushState(null, '', id);
+  };
+
+  const handleRestoreWindow = (id: string) => {
+    sfx.playOpen();
+    setWindows((prev) => {
+      const maxZ = prev.reduce((max, w) => Math.max(max, w.zIndex), 25);
+      return prev.map((w) => {
+        if (w.id !== id) return { ...w, isFocused: false };
+        return { ...w, minimized: false, isFocused: true, zIndex: maxZ + 1 };
+      });
+    });
+    setFocusedWindow(id);
+    window.history.pushState(null, '', id);
+  };
+
+  const handleUpdateWindowLayout = (
+    id: string,
+    layout: { x?: number; y?: number; width?: number; height?: number }
+  ) => {
+    setWindows((prev) =>
+      prev.map((w) => {
+        if (w.id !== id) return w;
+        const nextW = {
+          ...w,
+          x: layout.x !== undefined ? layout.x : w.x,
+          y: layout.y !== undefined ? layout.y : w.y,
+          width: layout.width !== undefined ? layout.width : w.width,
+          height: layout.height !== undefined ? layout.height : w.height,
+        };
+
+        // Cache sizes
+        localStorage.setItem(
+          `mmo_window_pref_${id}`,
+          JSON.stringify({
+            width: nextW.width,
+            height: nextW.height,
+            x: nextW.x,
+            y: nextW.y,
+          })
+        );
+        return nextW;
+      })
+    );
+  };
+
+  const handleSidebarClick = (href: string) => {
+    if (href === '/map') {
+      setFocusedWindow(null);
+      window.history.pushState(null, '', '/map');
+      return;
+    }
+    handleOpenWindow(href);
+  };
+
+  const getRegionResources = (regionId: number) => {
+    return game.spawns
+      .filter((s) => s.region_id === regionId)
+      .map((s) => game.resources.find((r) => r.id === s.resource_id))
+      .filter((r) => r !== undefined);
+  };
+
+  const getWindowIcon = (path: string) => {
+    const matched = navItems.find((n) => n.href === path);
+    return matched ? matched.icon : CompassIcon;
+  };
+
+  const inspectedRegion = game.regions.find((r) => r.id === inspectedRegionId);
+  const inspectedCountry = inspectedRegion ? game.countries.find((c) => c.id === inspectedRegion.country_id) : null;
+  const inspectedResources = inspectedRegionId ? getRegionResources(inspectedRegionId) : [];
+  const regionTheme = inspectedRegionId ? REGION_THEMES[inspectedRegionId] : null;
+
+  const isCurrentInspected = inspectedRegionId === game.profile?.current_region_id;
+  const isSameCountryInspected = inspectedRegion && activeRegion && inspectedRegion.country_id === activeRegion.country_id;
+  const travelEnergyCost = isSameCountryInspected ? 10 : 20;
+  const requiresTicketInspected = !isSameCountryInspected;
+
+  const currentHour = new Date().getHours();
+  const isNight = currentHour >= 19 || currentHour < 6;
+
+  // Mock AAA Quest details
+  const mockQuests = [
+    { title: "The Lost Heir", desc: "Talk to the Sage in the Northern Keep" },
+    { title: "A Kingdom Divided", desc: "Upgrade your Castle to level 20 (18/20)" },
+    { title: "The Iron Pact", desc: "Win 3 battles in the Arena (1/3)" },
+    { title: "Secrets of the Desert", desc: "Explore the Ancient Ruins (0/1)" }
   ];
+
+  // Mock AAA Troops count
+  const mockTroops = [
+    { name: "Swordsmen", count: "12,500" },
+    { name: "Spearmen", count: "8,300" },
+    { name: "Cavalry", count: "4,200" },
+    { name: "Archers", count: "9,700" }
+  ];
+
+  // Mock AAA Build Queue
+  const mockBuildQueue = [
+    { name: "Barracks Lv. 19", time: "03:25:47" },
+    { name: "Archery Range Lv. 18", time: "01:48:11" },
+    { name: "Marketplace Lv. 15", time: "07:12:33" }
+  ];
+
+  // Mock chat logs matching screenshot
+  const mockChatLogs = [
+    { type: "world", sender: "SultanZahir", msg: "Peace to all brothers." },
+    { type: "world", sender: "Valkyrie", msg: "Our alliance is recruiting active players!" },
+    { type: "alliance", sender: "AegisKing", msg: "We prepare for war. Stay strong." },
+    { type: "world", sender: "NomadX", msg: "Any trade guild looking for members?" }
+  ];
+
+  const minimizedWindows = windows.filter((w) => w.minimized);
 
   return (
     <GameContext.Provider value={game}>
-      <div className="min-h-screen flex bg-zinc-950 text-zinc-100 font-sans">
+      {/* Immersive AAA Fantasy Interface Viewport Shell */}
+      <div className="w-screen h-screen overflow-hidden relative select-none bg-zinc-950 text-zinc-100 font-sans">
         
-        {/* Mobile Sidebar Overlay */}
-        {sidebarOpen && (
-          <div
-            onClick={() => setSidebarOpen(false)}
-            className="fixed inset-0 z-40 bg-black/70 backdrop-blur-xs md:hidden"
-          />
-        )}
+        {/* UNIFIED TOP HUD - FULL SCREEN METALLIC HUD BAR */}
+        <header className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-zinc-800 to-zinc-950 border-b-4 border-game-gold shadow-2xl flex items-center justify-between px-6 z-50 relative">
+          <div className="absolute w-1 h-1 bg-game-gold rounded-full top-1 left-1" />
+          <div className="absolute w-1 h-1 bg-game-gold rounded-full top-1 right-1" />
 
-        {/* Sidebar Panel - Redesigned as Ornate Wood Frame */}
-        <aside
-          className={`fixed inset-y-0 left-0 z-50 w-64 rpg-panel-wood flex flex-col justify-between transform transition-transform duration-300 md:relative md:transform-none border-none ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-          }`}
-        >
-          {/* Corner Rivets */}
-          <div className="rpg-rivet top-1.5 left-1.5" />
-          <div className="rpg-rivet top-1.5 right-1.5" />
-          <div className="rpg-rivet bottom-1.5 left-1.5" />
-          <div className="rpg-rivet bottom-1.5 right-1.5" />
-
-          {/* Sidebar Header */}
-          <div className="p-5 border-b-2 border-game-gold/25 bg-zinc-950/40 flex items-center justify-between relative z-10">
-            <Link href="/" className="flex items-center gap-2">
-              <img src="/assets/branding/aegis-crest-icon.png" alt="Aegis Kingdoms Logo" className="h-6 w-6 object-contain filter drop-shadow-[0_0_4px_rgba(229,193,88,0.45)]" />
-              <span className="text-sm font-bold tracking-widest font-display text-game-gold filter drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                AEGIS KINGDOMS
+          {/* Top Left: Player Avatar Profile widget */}
+          <div className="flex items-center gap-3">
+            <div className="relative h-11 w-11 rounded-full rpg-avatar-circle bg-game-wood flex items-center justify-center font-bold text-game-gold text-lg select-none">
+              {game.profile?.username[0].toUpperCase()}
+              {/* Level indicator badge */}
+              <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full border border-game-gold bg-zinc-950 flex items-center justify-center text-[8.5px] font-pixel text-game-gold">
+                {game.stats?.level || 1}
+              </div>
+            </div>
+            
+            <div className="flex flex-col text-left justify-center leading-tight">
+              <span className="text-[10px] font-bold font-display text-zinc-200 tracking-wider flex items-center gap-1">
+                {game.profile?.username}
+                <span className="text-[7.5px] text-game-gold-dark font-sans font-bold uppercase">The Dragon's Heir</span>
               </span>
-            </Link>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="p-1 border border-zinc-800 hover:border-game-gold hover:bg-zinc-900 text-zinc-400 hover:text-white md:hidden transition-all"
-            >
-              <X className="h-4 w-4" />
+              
+              {/* Experience progression bar */}
+              {(() => {
+                const level = game.stats?.level || 1;
+                const exp = game.stats?.experience || 0;
+                const nextLevelExp = level * level * 100;
+                const pct = Math.min(100, Math.round((exp / nextLevelExp) * 100));
+                return (
+                  <div className="flex items-center gap-1.5 mt-1 select-none">
+                    <div className="w-24 bg-zinc-950 border border-game-gold/15 h-1.5 p-[0.5px]">
+                      <div className="rpg-progress-blue h-full" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-[7px] font-pixel text-blue-400 leading-none">{exp} / {nextLevelExp} EXP</span>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* Top Center: Unified Resource hud */}
+          <div className="hidden md:flex items-center gap-4 bg-zinc-950/60 p-1.5 px-4 border border-zinc-800 shadow-inner max-w-xl w-full justify-between">
+            {/* Gold reserves */}
+            <div className="flex items-center gap-1.5">
+              <Coins className="h-3.5 w-3.5 text-game-gold" />
+              <div className="flex flex-col text-right">
+                <span className="text-[6.5px] text-zinc-500 uppercase leading-none font-bold">Gold Reserves</span>
+                <span className="text-[10.5px] font-bold font-pixel text-game-gold leading-tight mt-0.5">{game.currencies?.gold.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Local Balance */}
+            <div className="flex items-center gap-1.5 border-l border-zinc-850 pl-4">
+              <Coins className="h-3.5 w-3.5 text-game-emerald" />
+              <div className="flex flex-col text-right">
+                <span className="text-[6.5px] text-zinc-500 uppercase leading-none font-bold">Local Currency</span>
+                <span className="text-[10.5px] font-bold font-pixel text-game-emerald leading-tight mt-0.5">{game.currencies?.local_currency_balance.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+              </div>
+            </div>
+
+            {/* Energy progress pool */}
+            <div className="flex items-center gap-2 border-l border-zinc-850 pl-4 flex-1 max-w-[150px]">
+              <Flame className="h-3.5 w-3.5 text-red-500 animate-pulse" />
+              <div className="flex-1 flex flex-col gap-0.5">
+                <div className="w-full bg-zinc-950 border border-game-gold/15 h-1.5 p-[0.5px]">
+                  <div className="rpg-progress-red h-full" style={{ width: `${game.stats?.energy || 0}%` }} />
+                </div>
+                <div className="flex items-center justify-between text-[7px] font-pixel text-red-400 leading-none">
+                  <span>EP</span>
+                  <span>{game.stats?.energy || 0} / 100</span>
+                </div>
+              </div>
+              <button onClick={handleClaimEnergy} className="rpg-button px-1.5 py-0.5 text-[6.5px] border border-game-gold text-game-gold tracking-widest leading-none">Claim</button>
+            </div>
+          </div>
+
+          {/* Top Right: Music Player Controls & Utilities */}
+          <div className="flex items-center gap-5">
+            {/* Audio singleton HUD controls */}
+            <div className="flex items-center gap-1 border border-zinc-850 bg-zinc-950/40 p-1">
+              <button onClick={music.toggle} className="p-1 hover:text-game-gold text-zinc-400">
+                {music.playing ? <Pause className="h-3 w-3 text-game-gold" /> : <Play className="h-3 w-3" />}
+              </button>
+              <button onClick={music.next} className="p-1 hover:text-game-gold text-zinc-400">
+                <SkipForward className="h-3 w-3" />
+              </button>
+              <div className="flex items-center gap-1 border-l border-zinc-850 pl-1">
+                <button onClick={music.toggleMute} className="hover:text-game-gold">
+                  {music.muted ? <VolumeX className="h-3 w-3 text-red-500" /> : <Volume2 className="h-3 w-3 text-zinc-400" />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={music.muted ? 0 : music.volume}
+                  disabled={music.muted}
+                  onChange={(e) => music.changeVolume(parseFloat(e.target.value))}
+                  className="w-10 h-0.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-game-gold"
+                  style={{ WebkitAppearance: 'none', outline: 'none' }}
+                />
+              </div>
+            </div>
+
+            {/* Utility buttons */}
+            <div className="flex items-center gap-2 border-l border-zinc-850 pl-4">
+              <button title="Courier Mail" className="p-1 text-zinc-400 hover:text-white"><Mail className="h-4.5 w-4.5" /></button>
+              <button title="Notifications" className="p-1 text-zinc-400 hover:text-white"><Bell className="h-4.5 w-4.5" /></button>
+              <button title="Settings" className="p-1 text-zinc-400 hover:text-white"><Settings className="h-4.5 w-4.5" /></button>
+              <button onClick={() => signOut()} title="Disconnect Link" className="p-1 text-zinc-400 hover:text-red-500 transition-colors"><LogOut className="h-4.5 w-4.5" /></button>
+            </div>
+          </div>
+        </header>
+
+        {/* FULLSCREEN BACKGROUND INTERACTIVE WORLD MAP CANVAS */}
+        <div className="map-canvas-container">
+          {/* Day/Night and Shaders overlays */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_30%,_rgba(0,0,0,0.85)_100%)] z-10 pointer-events-none" />
+          {isNight && (
+            <div className="absolute inset-0 bg-indigo-950/20 mix-blend-color-burn pointer-events-none z-10" />
+          )}
+
+          {/* Map texture board with Pan & Zoom */}
+          <div
+            className="absolute inset-0 select-none transition-transform duration-75 ease-out"
+            style={{
+              backgroundImage: "url('/assets/backgrounds/fantasy_world_map.png')",
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              width: '100%',
+              height: '100%',
+              transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
+              cursor: isDragging ? 'grabbing' : 'grab',
+            }}
+            onMouseDown={handleMapMouseDown}
+            onMouseMove={handleMapMouseMove}
+            onMouseUp={handleMapMouseUp}
+            onMouseLeave={handleMapMouseUp}
+          >
+            {/* Water shimmer effect overlay */}
+            <div className="map-water-shimmer" />
+
+            {/* Pins visually representing AAA locations */}
+            <div className="absolute inset-0">
+              {game.regions.map((region) => {
+                const positionMap: Record<number, { top: string; left: string }> = {
+                  7: { top: '17.3%', left: '73.8%' }, // Frostward Peaks
+                  10: { top: '51.8%', left: '15.3%' }, // Northgate Kingdom
+                  3: { top: '38.5%', left: '67.5%' }, // Ironhold Clans
+                  1: { top: '49%', left: '50.5%' }, // Aegis Capital
+                  4: { top: '67%', left: '86%' }, // Stormsea Harbour
+                  5: { top: '72.8%', left: '29.3%' }, // Southern Sultanate
+                  8: { top: '66.8%', left: '58.8%' }, // Ancient Ruins
+                  6: { top: '88%', left: '44.8%' }, // Whispering Forest
+                };
+                // Fallbacks
+                const coords = positionMap[region.id] || { top: '50%', left: '50%' };
+                
+                const isCurrent = region.id === game.profile?.current_region_id;
+                const isInspected = region.id === inspectedRegionId;
+                const pinTheme = REGION_THEMES[region.id] || { icon: CompassIcon, color: 'text-zinc-400', label: 'Outpost' };
+                const PinIconComponent = pinTheme.icon;
+
+                return (
+                  <div
+                    key={region.id}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 group"
+                    style={{ top: coords.top, left: coords.left }}
+                  >
+                    <button
+                      onClick={() => {
+                        setInspectedRegionId(region.id);
+                        setTravelError(null);
+                        setTravelSuccess(null);
+                      }}
+                      className={`w-11 h-11 rounded-none border-2 flex items-center justify-center transition-all bg-gradient-to-b from-zinc-800 to-zinc-950 relative hover:scale-110 shadow-lg ${
+                        isCurrent
+                          ? 'border-game-gold shadow-[0_0_15px_rgba(229,193,88,0.9)] animate-glow-pulse'
+                          : isInspected
+                          ? 'border-blue-400 shadow-[0_0_12px_rgba(96,165,250,0.8)]'
+                          : 'border-zinc-850 hover:border-game-gold/60'
+                      }`}
+                    >
+                      <div className="absolute w-1 h-1 bg-game-gold rounded-full top-0.5 left-0.5" />
+                      <div className="absolute w-1 h-1 bg-game-gold rounded-full top-0.5 right-0.5" />
+                      
+                      <PinIconComponent className={`h-5.5 w-5.5 ${pinTheme.color}`} />
+                    </button>
+
+                    <span className="mt-1.5 px-2.5 py-0.5 bg-zinc-950/90 border border-zinc-800 text-[8px] font-bold font-display uppercase tracking-widest text-zinc-300 shadow-md group-hover:text-game-gold group-hover:border-game-gold/50 transition-colors">
+                      {region.name} {isCurrent ? '★' : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="map-cloud-overlay map-cloud-1" />
+          <div className="map-cloud-overlay map-cloud-2" />
+        </div>
+
+        {/* LEFT OVERLAYS - QUESTS & CHAT PANEL */}
+        <div className="absolute top-20 left-4 bottom-24 w-80 z-40 flex flex-col gap-4 pointer-events-none">
+          
+          {/* Quests Journal Panel */}
+          <div className="rpg-hud-panel p-4 flex flex-col gap-2.5 pointer-events-auto shadow-2xl">
+            <h4 className="text-[10px] font-bold font-display text-game-gold uppercase tracking-widest flex items-center gap-1.5 border-b border-game-gold/15 pb-2">
+              <Compass className="h-4 w-4 text-game-gold" />
+              <span>Quests</span>
+            </h4>
+            <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto">
+              {mockQuests.map((q, idx) => (
+                <div key={idx} className="flex flex-col text-left gap-0.5 select-text hover:bg-zinc-900/40 p-1.5 border border-transparent hover:border-zinc-850 transition-all">
+                  <span className="text-[9.5px] font-bold font-display text-zinc-300 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-game-gold" />
+                    {q.title}
+                  </span>
+                  <span className="text-[8.5px] text-zinc-500 font-serif leading-relaxed pl-2.5">{q.desc}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => handleOpenWindow('/quests')} className="rpg-button w-full py-1 text-[8.5px] border border-game-gold text-game-gold tracking-widest uppercase font-display select-none">
+              View All Quests
             </button>
           </div>
 
-          {/* Navigation links */}
-          <nav className="flex-1 px-3.5 py-4 flex flex-col gap-1.5 overflow-y-auto relative z-10">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 px-3.5 py-2 text-xs font-bold font-display uppercase tracking-wider border-2 transition-all duration-100 group ${
-                    isActive
-                      ? 'bg-gradient-to-r from-game-gold/15 to-transparent border-game-gold text-game-gold shadow-[0_0_10px_rgba(229,193,88,0.12)]'
-                      : 'border-transparent text-zinc-400 hover:text-game-gold hover:bg-zinc-950/40 hover:border-game-gold-dark/20'
+          {/* Realtime Chat Log Panel */}
+          <div className="rpg-hud-panel flex-1 p-4 flex flex-col gap-2 pointer-events-auto min-h-[280px]">
+            {/* Tabs */}
+            <div className="grid grid-cols-4 gap-1 border-b border-zinc-850 pb-2">
+              {(['WORLD', 'KINGDOM', 'ALLIANCE', 'SYSTEM'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setChatTab(tab)}
+                  className={`py-1 text-[8px] font-bold font-display tracking-wider uppercase text-center border cursor-pointer transition-colors ${
+                    chatTab === tab 
+                      ? 'border-game-gold bg-game-gold/10 text-game-gold' 
+                      : 'border-zinc-850 text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
-                  <Icon className={`h-4.5 w-4.5 transition-transform group-hover:scale-105 ${isActive ? 'text-game-gold' : 'text-zinc-500 group-hover:text-game-gold'}`} />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
+                  {tab}
+                </button>
+              ))}
+            </div>
 
-          {/* Sidebar Footer */}
-          <div className="p-4 border-t-2 border-game-gold/25 bg-zinc-950/20 relative z-10">
-            <button
-              onClick={() => signOut()}
-              className="flex w-full items-center justify-center gap-2 rpg-button rpg-button-crimson font-display rounded-none text-[10px] tracking-widest uppercase py-2.5"
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              <span>Disconnect Link</span>
+            {/* Chat Feed */}
+            <div className="flex-1 overflow-y-auto max-h-[250px] p-2 bg-zinc-950/40 border border-zinc-850 shadow-inner flex flex-col gap-2 select-text text-left">
+              {mockChatLogs.map((log, idx) => {
+                const colorMap = log.type === 'alliance' ? 'text-game-gold' : 'text-cyan-400';
+                return (
+                  <div key={idx} className="text-[9px] font-serif leading-relaxed">
+                    <span className={`font-bold capitalize ${colorMap}`}>[{log.type}] {log.sender}:</span>
+                    <span className="text-zinc-300 pl-1.5">{log.msg}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Send input */}
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                placeholder="Enter message..."
+                className="flex-1 rpg-input px-2.5 py-1.5 text-[9px] rounded-none outline-none border-zinc-800"
+              />
+              <button className="rpg-button px-2.5 text-[9px] uppercase font-display border border-game-gold text-game-gold">Send</button>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT OVERLAYS - CASTLE, TROOPS, BUILD QUEUE & MINIMAP */}
+        <div className="absolute top-20 right-4 bottom-24 w-80 z-40 flex flex-col gap-4 pointer-events-none">
+          
+          {/* Castle Details Panel */}
+          <div className="rpg-hud-panel p-4 flex flex-col gap-2 pointer-events-auto shadow-2xl text-left">
+            <h4 className="text-[10px] font-bold font-display text-game-gold uppercase tracking-widest flex items-center gap-1.5 border-b border-game-gold/15 pb-2">
+              <Landmark className="h-4 w-4 text-game-gold" />
+              <span>Castle</span>
+            </h4>
+            <div className="flex gap-3 items-center">
+              <div className="h-12 w-16 bg-zinc-900 border border-zinc-800 flex items-center justify-center font-display text-[9px] text-zinc-500 uppercase select-none relative overflow-hidden">
+                <img src="/assets/backgrounds/fantasy_world_map.png" alt="Castle Thumbnail" className="absolute inset-0 w-full h-full object-cover filter brightness-50" />
+                <span className="relative z-10 text-game-gold">Castle</span>
+              </div>
+              <div className="flex-1 flex flex-col">
+                <span className="text-[9.5px] font-bold font-display text-zinc-300 uppercase tracking-widest">Lv. 18 Keep</span>
+                {/* Exp progress bar */}
+                <div className="w-full bg-zinc-950 border border-game-gold/15 h-2 mt-1.5 p-[0.5px]">
+                  <div className="rpg-progress-blue h-full" style={{ width: '50%' }} />
+                </div>
+                <div className="flex items-center justify-between text-[7px] font-pixel text-zinc-500 mt-1 select-none">
+                  <span>Upgrade exp</span>
+                  <span>12,500 / 25,000</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Troops Panel */}
+          <div className="rpg-hud-panel p-4 flex flex-col gap-2.5 pointer-events-auto shadow-2xl text-left">
+            <h4 className="text-[10px] font-bold font-display text-game-gold uppercase tracking-widest flex items-center gap-1.5 border-b border-game-gold/15 pb-2">
+              <Swords className="h-4 w-4 text-game-gold" />
+              <span>Troops</span>
+            </h4>
+            <div className="grid grid-cols-2 gap-2">
+              {mockTroops.map((t, idx) => (
+                <div key={idx} className="p-1.5 border border-zinc-850 bg-zinc-950/40 flex justify-between items-center text-[9px] font-display select-none">
+                  <span className="text-zinc-400 font-bold uppercase tracking-wider">{t.name}</span>
+                  <span className="font-pixel text-game-gold">{t.count}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => handleOpenWindow('/combat')} className="rpg-button w-full py-1 text-[8.5px] border border-game-gold text-game-gold tracking-widest uppercase font-display select-none">
+              Manage Troops
             </button>
           </div>
-        </aside>
 
-        {/* Content Shell */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          
-          {/* Header Panel - Redesigned as Ornate Stone Bar */}
-          <header className="h-16 rpg-panel-stone border-none flex items-center justify-between px-6 shrink-0 relative z-30 shadow-lg">
-            {/* Left Header: Toggle Button & Title */}
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="p-2 border border-zinc-800 bg-zinc-900 rounded-none text-zinc-400 hover:text-game-gold md:hidden hover:border-game-gold transition-colors"
-              >
-                <Menu className="h-4 w-4" />
-              </button>
-              
-              {/* Location Badge (Skeuomorphic Nameplate) */}
-              <div className="hidden sm:flex items-center gap-2 text-[10px] font-bold font-display uppercase tracking-widest px-4 py-1.5 border border-game-gold/30 bg-game-wood/80 text-game-gold shadow-md">
-                <MapPin className="h-3.5 w-3.5 text-game-gold animate-pulse" />
-                <span>
-                  {activeRegion?.name || 'Unknown Region'} ({activeCountry?.name || 'Unknown Nation'})
-                </span>
-              </div>
-
-              {/* OST Music Controls */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={music.toggle}
-                  title={music.playing ? 'Pause music' : 'Play music'}
-                  className="p-2 border border-zinc-800 bg-zinc-900 rounded-none text-zinc-400 hover:text-game-gold hover:border-game-gold transition-colors"
-                >
-                  {music.playing ? <Pause className="h-4 w-4 text-game-gold" /> : <Play className="h-4 w-4" />}
-                </button>
-                <button
-                  onClick={music.next}
-                  title="Next track"
-                  className="p-2 border border-zinc-800 bg-zinc-900 rounded-none text-zinc-400 hover:text-game-gold hover:border-game-gold transition-colors"
-                >
-                  <SkipForward className="h-4 w-4" />
-                </button>
-                <div className="flex items-center gap-2 p-2 border border-zinc-800 bg-zinc-900 rounded-none text-zinc-400 hover:border-game-gold transition-colors">
-                  <button
-                    onClick={music.toggleMute}
-                    title={music.muted ? 'Unmute' : 'Mute'}
-                    className="hover:text-game-gold transition-colors"
-                  >
-                    {music.muted ? <VolumeX className="h-4 w-4 text-red-500" /> : <Volume2 className="h-4 w-4" />}
+          {/* Build Queue Panel */}
+          <div className="rpg-hud-panel p-4 flex flex-col gap-2.5 pointer-events-auto shadow-2xl text-left">
+            <h4 className="text-[10px] font-bold font-display text-game-gold uppercase tracking-widest flex items-center gap-1.5 border-b border-game-gold/15 pb-2">
+              <Factory className="h-4 w-4 text-game-gold" />
+              <span>Build Queue</span>
+            </h4>
+            <div className="flex flex-col gap-2 select-none">
+              {mockBuildQueue.map((q, idx) => (
+                <div key={idx} className="flex justify-between items-center p-1.5 bg-zinc-950/40 border border-zinc-850">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-bold font-display text-zinc-300 uppercase tracking-widest leading-none">{q.name}</span>
+                    <span className="text-[8px] font-pixel text-zinc-500 mt-1">{q.time} remaining</span>
+                  </div>
+                  <button className="rpg-button px-2 py-0.5 text-[7px] border border-game-gold text-game-gold uppercase tracking-widest active:translate-y-0.5">
+                    &gt;&gt;
                   </button>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={music.muted ? 0 : music.volume}
-                    disabled={music.muted}
-                    onChange={(e) => music.changeVolume(parseFloat(e.target.value))}
-                    className="w-14 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-game-gold focus:outline-none"
-                    style={{ WebkitAppearance: 'none', outline: 'none' }}
-                  />
                 </div>
-                {music.playing && (
-                  <span className="hidden lg:block text-[9px] font-bold font-display uppercase tracking-widest text-zinc-500 pl-1">
-                    ♪ {TRACKS[music.track].name}
+              ))}
+            </div>
+          </div>
+
+          {/* MiniMap Panel */}
+          <div className="rpg-hud-panel flex-1 p-4 flex flex-col gap-2 pointer-events-auto min-h-[220px] text-left">
+            <h4 className="text-[10px] font-bold font-display text-game-gold uppercase tracking-widest flex items-center gap-1.5 border-b border-game-gold/15 pb-2">
+              <CompassIcon className="h-4 w-4 text-game-gold" />
+              <span>Realm Map</span>
+            </h4>
+            
+            {/* Minimap viewport display */}
+            <div className="flex-1 bg-zinc-900 border border-zinc-850 relative overflow-hidden flex items-center justify-center">
+              <img src="/assets/backgrounds/fantasy_world_map.png" alt="Minimap Backdrop" className="absolute inset-0 w-full h-full object-cover filter brightness-50 contrast-125" />
+              {/* Dynamic camera viewport indicator */}
+              <div className="absolute h-8 w-12 border border-white bg-white/5 shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
+              
+              {/* Floating minimap buttons */}
+              <div className="absolute bottom-2 right-2 flex gap-1 z-20">
+                <button onClick={handleZoomIn} className="w-5 h-5 flex items-center justify-center font-bold text-[9px] border border-zinc-800 bg-zinc-950 text-game-gold hover:bg-zinc-900 shadow-md">+</button>
+                <button onClick={handleZoomOut} className="w-5 h-5 flex items-center justify-center font-bold text-[9px] border border-zinc-800 bg-zinc-950 text-game-gold hover:bg-zinc-900 shadow-md">-</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* GEOGRAPHICAL PROVINCE INSPECTOR BOTTOM HUD PANEL */}
+        {inspectedRegionId && inspectedRegion && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-md w-full rpg-panel-stone p-4 flex flex-col gap-3 shadow-2xl border-2">
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <h3 className="text-sm font-bold font-display text-game-gold uppercase tracking-wide flex items-center gap-1.5">
+                  <MapPin className="h-4 w-4 fill-current animate-pulse text-game-gold" />
+                  <span>{inspectedRegion.name}</span>
+                </h3>
+                <div className="flex items-center gap-2 text-[8px] text-zinc-500 font-serif mt-1 capitalize">
+                  <span className="flex items-center gap-0.5">
+                    <Cloud className="h-3 w-3" /> {inspectedRegion.climate}
                   </span>
+                  <span>•</span>
+                  <span className="flex items-center gap-0.5">
+                    <User className="h-3 w-3" /> Pop {inspectedRegion.population}
+                  </span>
+                  <span>•</span>
+                  <span className="text-zinc-400 font-bold uppercase tracking-wider">{inspectedCountry?.name}</span>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => setInspectedRegionId(null)}
+                className="p-1 border border-zinc-800 hover:border-red-500 bg-zinc-950 text-zinc-400 hover:text-red-500 cursor-pointer transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {regionTheme && (
+              <div className="p-2 bg-zinc-950 border border-zinc-900 text-[9.5px] font-serif text-zinc-400 leading-relaxed text-left">
+                <span className="font-bold text-zinc-300">{regionTheme.label}:</span> {inspectedRegion.climate === 'arid' ? 'An arid outpost with resource potential.' : 'A region suitable for exploration and harvesting.'}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1 border-t border-zinc-900 pt-2 text-left">
+              <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest font-display">Spawned Raw Materials</span>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {inspectedResources.length === 0 ? (
+                  <span className="text-[8px] text-zinc-600 italic font-serif">No minerals or wood spawns in this sector.</span>
+                ) : (
+                  inspectedResources.map((res) => res && (
+                    <span key={res.id} className="px-2 py-0.5 border border-zinc-800 bg-zinc-900 text-[8px] text-zinc-400 font-display">
+                      {res.name}
+                    </span>
+                  ))
                 )}
               </div>
             </div>
 
-            {/* Right Header: Balances & Stats */}
-            <div className="flex items-center gap-4 sm:gap-6">
-              {/* Currency: Local Balances */}
-              <div className="flex flex-col items-end">
-                <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest font-display">Local Currency</span>
-                <span className="text-base font-bold text-game-emerald font-pixel tracking-wide filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
-                  {game.currencies?.local_currency_balance.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-[9px] text-zinc-600 font-sans">LC</span>
-                </span>
+            {travelError && (
+              <div className="p-2 border border-red-800 bg-red-950/20 text-red-400 text-[9px] font-bold font-display uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <span>{travelError}</span>
               </div>
-
-              {/* Currency: Gold Balances */}
-              <div className="flex flex-col items-end">
-                <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest font-display">Gold Reserves</span>
-                <span className="text-base font-bold text-game-gold font-pixel tracking-wide flex items-center gap-1 filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
-                  <Coins className="h-3.5 w-3.5 text-game-gold-dark" />
-                  <span>{game.currencies?.gold.toFixed(4)}</span>
-                </span>
+            )}
+            {travelSuccess && (
+              <div className="p-2 border border-game-emerald bg-emerald-950/20 text-emerald-400 text-[9px] font-bold font-display uppercase tracking-widest flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                <span>{travelSuccess}</span>
               </div>
+            )}
 
-              {/* Quick Profile Info */}
-              <div className="flex items-center gap-3 pl-4 border-l border-zinc-800/80">
-                <div className="hidden md:flex flex-col text-right">
-                  <span className="text-xs font-bold font-display text-zinc-200 tracking-wide">{game.profile?.username}</span>
-                  <span className="text-[8px] font-bold text-game-gold-dark font-sans uppercase tracking-wider capitalize">{game.profile?.role}</span>
-                </div>
-                <div className="h-9 w-9 rounded-none border-2 border-game-gold bg-game-wood text-game-gold flex items-center justify-center font-bold font-display text-sm shadow-[0_0_8px_rgba(229,193,88,0.25)] select-none">
-                  {game.profile?.username[0].toUpperCase()}
-                </div>
-              </div>
-            </div>
-          </header>
-
-          {/* Core Game Body */}
-          <main className="flex-1 overflow-y-auto bg-zinc-950 p-6 md:p-8 relative">
-            <div className={`${pathname === '/map' ? 'w-full max-w-none' : 'max-w-6xl mx-auto'} flex flex-col gap-6`}>
-              
-              {/* Top Global Energy Bar / Experience Banner */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Energy Monitor - Skeuomorphic health pool */}
-                <div className="rpg-panel-stone p-4 rounded-none flex items-center justify-between gap-4 relative">
-                  <div className="rpg-rivet top-1 left-1" />
-                  <div className="rpg-rivet top-1 right-1" />
-                  <div className="rpg-rivet bottom-1 left-1" />
-                  <div className="rpg-rivet bottom-1 right-1" />
-
-                  <div className="flex items-center gap-3 relative z-10">
-                    <div className="p-2 bg-red-950/20 border border-red-900/40 text-red-500 rounded-none">
-                      <Flame className="h-4.5 w-4.5 animate-pulse" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[11px] font-bold font-display text-zinc-300 uppercase tracking-widest">Active Energy</span>
-                      <span className="text-[9px] font-serif text-zinc-500 mt-0.5">Regens +5 per 6m</span>
-                    </div>
-                  </div>
-                  <div className="flex-1 max-w-[200px] flex flex-col gap-1 items-end relative z-10">
-                    <div className="w-full rpg-progress-bar rounded-none">
-                      <div
-                        className="rpg-progress-fill bg-gradient-to-r from-red-700 to-orange-500 rounded-none"
-                        style={{ width: `${game.stats?.energy || 0}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold font-pixel text-red-500 tracking-wider rpg-stats-value">{game.stats?.energy || 0} / 100 EP</span>
-                      <button
-                        onClick={async () => {
-                          await game.claimEnergy();
-                        }}
-                        className="rpg-button px-2 py-0.5 text-[8px] tracking-widest shadow-sm rounded-none border border-game-gold ml-1 text-game-gold uppercase select-none"
-                      >
-                        Restore EP
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Level / EXP Monitor - Skeuomorphic mana pool */}
-                <div className="rpg-panel-stone p-4 rounded-none flex items-center justify-between gap-4 relative">
-                  <div className="rpg-rivet top-1 left-1" />
-                  <div className="rpg-rivet top-1 right-1" />
-                  <div className="rpg-rivet bottom-1 left-1" />
-                  <div className="rpg-rivet bottom-1 right-1" />
-
-                  <div className="flex items-center gap-3 relative z-10">
-                    <div className="p-2 bg-indigo-950/20 border border-indigo-900/40 text-indigo-400 rounded-none">
-                      <UserIcon className="h-4.5 w-4.5" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[11px] font-bold font-display text-zinc-300 uppercase tracking-widest">Commander Level</span>
-                      <span className="text-[9px] font-serif text-zinc-500 mt-0.5">Rank progression</span>
-                    </div>
-                  </div>
+            <div className="flex justify-between items-center border-t border-zinc-900 pt-2.5">
+              {isCurrentInspected ? (
+                <div className="flex items-center gap-2 w-full justify-between">
+                  <span className="px-3 py-1.5 border border-game-gold/30 bg-game-gold/5 text-[9px] font-bold font-display text-game-gold uppercase tracking-widest leading-none">
+                    Active Coordinates
+                  </span>
                   
-                  {(() => {
-                    const level = game.stats?.level || 1;
-                    const exp = game.stats?.experience || 0;
-                    const nextLevelExp = level * level * 100;
-                    const pct = Math.min(100, Math.round((exp / nextLevelExp) * 100));
-                    return (
-                      <div className="flex-1 max-w-[200px] flex flex-col gap-1 items-end relative z-10">
-                        <div className="w-full rpg-progress-bar rounded-none">
-                          <div
-                            className="rpg-progress-fill bg-gradient-to-r from-blue-700 to-indigo-500 rounded-none"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-bold font-pixel text-indigo-400 tracking-wider rpg-stats-value">
-                          Lvl {level} ({exp} / {nextLevelExp} EXP - {pct}%)
+                  {regionTheme && (
+                    <button
+                      onClick={() => handleInspectAction(regionTheme.path)}
+                      className="rpg-button px-4 py-1.5 text-[9px] tracking-widest"
+                    >
+                      {regionTheme.action}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col text-left">
+                      <span className="text-[7px] text-zinc-600 uppercase font-display tracking-widest font-bold leading-none">Transit cost</span>
+                      <span className="text-xs font-pixel text-red-500 mt-0.5">{travelEnergyCost} EP</span>
+                    </div>
+                    {requiresTicketInspected && (
+                      <div className="flex flex-col border-l border-zinc-850 pl-3 text-left">
+                        <span className="text-[7px] text-zinc-600 uppercase font-display tracking-widest font-bold leading-none">Jump Ticket</span>
+                        <span className={`text-xs font-pixel mt-0.5 ${ticketsCount > 0 ? 'text-zinc-400' : 'text-red-500'}`}>
+                          x1 {ticketsCount > 0 ? '(Owned)' : '(Required)'}
                         </span>
                       </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              {/* Renders the sub page view */}
-              <div className="animate-card-slide relative z-10">{children}</div>
-              
+                    )}
+                  </div>
+                  
+                  <button
+                    onClick={() => handleInspectTravel(inspectedRegion.id, inspectedRegion.name)}
+                    disabled={game.actionLoading || (requiresTicketInspected && ticketsCount === 0) || (game.stats ? game.stats.energy < travelEnergyCost : true)}
+                    className="rpg-button px-4 py-2 text-[9px] tracking-widest rounded-none uppercase font-display"
+                  >
+                    Initiate Jump
+                  </button>
+                </>
+              )}
             </div>
-          </main>
+          </div>
+        )}
+
+        {/* ORNATE BOTTOM ACTION NAVIGATION DOCK */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 bg-zinc-950/90 border-2 border-game-gold p-2 shadow-2xl flex items-center gap-4">
+          {/* Quick options buttons (left side of dock) */}
+          <div className="flex items-center gap-1 border-r border-zinc-800 pr-3">
+            <button title="Settings Options" className="h-6 w-6 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-game-gold hover:border-game-gold transition-colors cursor-pointer"><Settings className="h-3 w-3" /></button>
+            <button title="Guide Book" className="h-6 w-6 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-game-gold hover:border-game-gold transition-colors cursor-pointer"><BookIcon className="h-3 w-3" /></button>
+            <button title="Leaderboard" className="h-6 w-6 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-game-gold hover:border-game-gold transition-colors cursor-pointer"><TrophyIcon className="h-3 w-3" /></button>
+          </div>
+
+          {/* Large styled navigation triggers */}
+          <div className="flex items-center gap-2">
+            {[
+              { label: 'HERO', path: '/dashboard', icon: UserIcon },
+              { label: 'INVENTORY', path: '/inventory', icon: Boxes },
+              { label: 'SKILLS', path: '/gathering', icon: Pickaxe },
+              { label: 'ALLIANCE', path: '/politics', icon: Landmark },
+              { label: 'KINGDOM', path: '/industrial', icon: Factory },
+              { label: 'MAIL', path: '/mail', icon: Mail },
+              { label: 'RANKING', path: '/world', icon: Globe },
+              { label: 'SHOP', path: '/marketplace', icon: Scale },
+            ].map((dockItem) => {
+              const IconComponent = dockItem.icon;
+              const isWinActive = pathname === dockItem.path;
+              return (
+                <button
+                  key={dockItem.label}
+                  onClick={() => handleSidebarClick(dockItem.path)}
+                  className={`px-4 py-2 border flex flex-col items-center gap-1 cursor-pointer transition-all ${
+                    isWinActive
+                      ? 'border-game-gold bg-game-gold/15 text-game-gold shadow-[0_0_10px_rgba(229,193,88,0.25)]'
+                      : 'border-zinc-800 hover:border-game-gold/50 text-zinc-400 hover:text-game-gold'
+                  }`}
+                >
+                  <IconComponent className="h-4.5 w-4.5" />
+                  <span className="text-[7.5px] font-bold font-display uppercase tracking-widest">{dockItem.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        {/* SLEEK HORIZONTAL MINIMIZED WINDOWS DOCK */}
+        {minimizedWindows.length > 0 && (
+          <div className="absolute bottom-24 right-4 flex flex-col gap-2 z-40 bg-zinc-950/90 border-2 border-game-gold p-2 shadow-2xl">
+            <span className="text-[7px] text-zinc-500 font-bold uppercase tracking-widest border-b border-zinc-800 pb-1 text-center">Minimized</span>
+            {minimizedWindows.map((win) => {
+              const IconComponent = getWindowIcon(win.id);
+              return (
+                <button
+                  key={win.id}
+                  onClick={() => handleRestoreWindow(win.id)}
+                  className="rpg-button px-3.5 py-1.5 text-[8px] font-bold font-display uppercase tracking-widest flex items-center gap-1.5 border border-game-gold hover:border-white text-game-gold rounded-none cursor-pointer"
+                >
+                  <IconComponent className="h-3 w-3" />
+                  <span>{win.title}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* MULTIPLE CONCURRENT DRAGGABLE WINDOWS OVERLAYS */}
+        <div className="game-window-overlay absolute inset-0 z-20 overflow-hidden pointer-events-none">
+          {windows.map((win) => {
+            if (win.minimized) return null;
+            const isRouteActive = win.id === pathname;
+            const PageComponent = getPageComponent(win.id);
+            return (
+              <GameWindow
+                key={win.id}
+                title={win.title}
+                pathname={win.id}
+                isActive={win.isFocused}
+                position={{ x: win.x, y: win.y }}
+                size={{ width: win.width, height: win.height }}
+                maximized={win.maximized}
+                zIndex={win.zIndex}
+                onFocus={() => handleFocusWindow(win.id)}
+                onClose={() => handleCloseWindow(win.id)}
+                onMinimize={() => handleMinimizeWindow(win.id)}
+                onMaximize={() => handleMaximizeWindow(win.id)}
+                onUpdateLayout={(layout) => handleUpdateWindowLayout(win.id, layout)}
+              >
+                {isRouteActive ? children : (PageComponent ? <PageComponent /> : null)}
+              </GameWindow>
+            );
+          })}
+        </div>
+
+        {/* Floating RPG text feedback overlay */}
+        <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+          {floatingTexts.map((item) => (
+            <span
+              key={item.id}
+              className={`absolute font-pixel font-bold text-xs uppercase tracking-widest pointer-events-none drop-shadow-[0_2px_4px_rgba(0,0,0,1)] animate-float-up-fade ${item.colorClass}`}
+              style={{ left: `${item.x}px`, top: `${item.y}px`, transform: 'translate(-50%, -50%)' }}
+            >
+              {item.text}
+            </span>
+          ))}
+        </div>
+
       </div>
     </GameContext.Provider>
   );
 }
-
