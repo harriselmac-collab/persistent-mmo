@@ -1,7 +1,7 @@
 'use client';
 
 import { useGameContext } from '../layout';
-import { Shield, Sparkles, Sword, Wrench, Calendar, BookOpen, AlertCircle, Scale, Coins } from 'lucide-react';
+import { Sparkles, Calendar, BookOpen, AlertCircle, Scale, Coins } from 'lucide-react';
 
 export default function DashboardPage() {
   const { profile, stats, playerResources, resources, auditLogs, regions, countries, experienceThresholds } = useGameContext();
@@ -90,41 +90,49 @@ export default function DashboardPage() {
           </div>
         </div>
  
-        {/* Gathering skill & Stats metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="rpg-panel-stone p-5 rounded-none flex items-center justify-between gap-4 relative shadow-md">
-            <div className="rpg-rivet top-1 left-1" />
-            <div className="rpg-rivet top-1 right-1" />
-            <div className="rpg-rivet bottom-1 left-1" />
-            <div className="rpg-rivet bottom-1 right-1" />
+        {/* Hero Attributes & Traits */}
+        <div className="rpg-panel-stone p-6 rounded-none flex flex-col gap-4 relative shadow-lg">
+          <div className="rpg-rivet top-1 left-1" />
+          <div className="rpg-rivet top-1 right-1" />
+          <div className="rpg-rivet bottom-1 left-1" />
+          <div className="rpg-rivet bottom-1 right-1" />
 
-            <div className="flex flex-col gap-1.5 relative z-10">
-              <div className="flex items-center gap-2 text-game-emerald">
-                <Wrench className="h-4.5 w-4.5" />
-                <h4 className="text-xs font-bold uppercase font-display tracking-widest">Harvesting Level</h4>
-              </div>
-              <span className="text-3xl font-bold font-pixel text-white tracking-wide filter drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{stats?.work_skill.toFixed(4)}</span>
-              <span className="text-[10px] font-serif text-zinc-500 leading-relaxed">
-                Labor factor. Increases quantity yield per energy spent when gathering resources.
-              </span>
+          <h3 className="text-sm font-bold font-display text-game-gold uppercase tracking-widest relative z-10">Hero Attributes & Traits</h3>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 relative z-10">
+            {/* Health / Vitality */}
+            <div className="p-3 bg-zinc-950/80 border border-zinc-900 shadow-inner flex flex-col items-center text-center rounded-none group hover:border-game-gold/30 transition-all">
+              <img src="/assets/traits/health.png" alt="Health" className="h-12 w-12 object-contain filter drop-shadow-md mb-2 group-hover:scale-105 transition-transform" />
+              <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest font-display">Health</span>
+              <span className="text-sm font-bold font-pixel text-white mt-1">{stats?.health || 100} / {stats?.max_health || 100}</span>
             </div>
-          </div>
 
-          <div className="rpg-panel-stone p-5 rounded-none flex items-center justify-between gap-4 relative shadow-md">
-            <div className="rpg-rivet top-1 left-1" />
-            <div className="rpg-rivet top-1 right-1" />
-            <div className="rpg-rivet bottom-1 left-1" />
-            <div className="rpg-rivet bottom-1 right-1" />
+            {/* Combat Power (Strength) */}
+            <div className="p-3 bg-zinc-950/80 border border-zinc-900 shadow-inner flex flex-col items-center text-center rounded-none group hover:border-game-gold/30 transition-all">
+              <img src="/assets/traits/strength.png" alt="Strength" className="h-12 w-12 object-contain filter drop-shadow-md mb-2 group-hover:scale-105 transition-transform" />
+              <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest font-display">Strength</span>
+              <span className="text-sm font-bold font-pixel text-white mt-1">{(stats?.strength || 10).toFixed(2)}</span>
+            </div>
 
-            <div className="flex flex-col gap-1.5 relative z-10">
-              <div className="flex items-center gap-2 text-red-500">
-                <Sword className="h-4.5 w-4.5" />
-                <h4 className="text-xs font-bold uppercase font-display tracking-widest">Combat Power</h4>
-              </div>
-              <span className="text-3xl font-bold font-pixel text-white tracking-wide filter drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{stats?.strength.toFixed(4)}</span>
-              <span className="text-[10px] font-serif text-zinc-500 leading-relaxed">
-                Drilled raw physical force. Dictates wall contribution scores in combat campaigns.
-              </span>
+            {/* Harvesting Level (Work Skill) */}
+            <div className="p-3 bg-zinc-950/80 border border-zinc-900 shadow-inner flex flex-col items-center text-center rounded-none group hover:border-game-gold/30 transition-all">
+              <img src="/assets/traits/work_skill.png" alt="Work Skill" className="h-12 w-12 object-contain filter drop-shadow-md mb-2 group-hover:scale-105 transition-transform" />
+              <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest font-display">Harvesting</span>
+              <span className="text-sm font-bold font-pixel text-white mt-1">{(stats?.work_skill || 1).toFixed(2)}</span>
+            </div>
+
+            {/* Defense */}
+            <div className="p-3 bg-zinc-950/80 border border-zinc-900 shadow-inner flex flex-col items-center text-center rounded-none group hover:border-game-gold/30 transition-all">
+              <img src="/assets/traits/defense.png" alt="Defense" className="h-12 w-12 object-contain filter drop-shadow-md mb-2 group-hover:scale-105 transition-transform" />
+              <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest font-display">Defense</span>
+              <span className="text-sm font-bold font-pixel text-white mt-1">{(stats?.defense || 0).toFixed(2)}</span>
+            </div>
+
+            {/* Speed */}
+            <div className="p-3 bg-zinc-950/80 border border-zinc-900 shadow-inner flex flex-col items-center text-center rounded-none group hover:border-game-gold/30 transition-all col-span-2 sm:col-span-1">
+              <img src="/assets/traits/speed.png" alt="Speed" className="h-12 w-12 object-contain filter drop-shadow-md mb-2 group-hover:scale-105 transition-transform" />
+              <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest font-display">Speed</span>
+              <span className="text-sm font-bold font-pixel text-white mt-1">{(stats?.speed || 0).toFixed(2)}</span>
             </div>
           </div>
         </div>
