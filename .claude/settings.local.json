@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk -F: '{s+=$2} END {print s \" tables\"}')",
+      "Bash(awk -F: '{s+=$2} END {print s \" functions\"}')",
+      "Skill(run)",
+      "Bash(npm run *)",
+      "Bash(lsof -nP -iTCP:3000 -sTCP:LISTEN)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w 'login: %{http_code}\\\\n' http://localhost:3000/login)",
+      "Bash(curl -s --max-time 10 http://localhost:3000/login -o /dev/null -w 'login: %{http_code}\\\\n')",
+      "Bash(curl -s --max-time 10 http://localhost:3000)",
+      "Bash(curl -s --max-time 30 http://localhost:3000/ -o /tmp/root.html -w 'root: %{http_code} in %{time_total}s\\\\n')",
+      "Read(//tmp/**)",
+      "Bash(curl -s --max-time 60 http://localhost:3000/login -o /dev/null -w 'login: %{http_code} in %{time_total}s\\\\n')",
+      "Bash(ps -o pid,etime,stat,command -p 5074)",
+      "Bash(kill 5074)",
+      "Bash(kill -9 5074)",
+      "Bash(open *)",
+      "Bash(npm test *)",
+      "Bash(npx eslint *)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"tsc exit: $?\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/assets/music/main-menu-theme.mp3)"
+    ]
+  }
+}
