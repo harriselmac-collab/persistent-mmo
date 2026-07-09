@@ -20,7 +20,8 @@ import {
   ArrowRightLeft, 
   Heart,
   Zap,
-  Gauge
+  Gauge,
+  Lock
 } from 'lucide-react';
 
 const DEFAULT_ITEM_TEMPLATES = [
@@ -51,6 +52,7 @@ const renderItemIcon = (name: string, fallbackEmoji: string, sizeClass: string =
 
 export default function InventoryPage() {
   const { 
+    stats,
     playerResources, 
     resources, 
     inventory, 
@@ -67,6 +69,8 @@ export default function InventoryPage() {
     repairItem,
     unlockBlueprint
   } = useGameContext();
+
+  const isCraftingLocked = (stats?.level || 1) < 8;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<'all' | 'raw' | 'refined' | 'gear' | 'consumable'>('all');
@@ -541,19 +545,23 @@ export default function InventoryPage() {
 
           {/* Tab Controller bar - Redesigned folder style book tabs */}
           <div className="flex border-b-2 border-game-gold/30 bg-zinc-950/40 p-0.5 w-full">
-            {(['bag', 'craft', 'blueprints', 'repair', 'history'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setRightPanelTab(tab)}
-                className={`flex-1 py-2.5 px-1 text-[10px] font-bold font-display uppercase tracking-widest transition-all text-center border-t-2 border-l-2 border-r-2 ${
-                  rightPanelTab === tab 
-                    ? 'bg-game-wood border-game-gold text-game-gold shadow-[0_-2px_5px_rgba(229,193,88,0.1)] translate-y-[2px]' 
-                    : 'bg-zinc-950/20 border-transparent text-zinc-500 hover:text-game-gold'
-                }`}
-              >
-                {tab === 'bag' ? 'Backpack Bag' : tab === 'craft' ? 'Crafting' : tab === 'repair' ? `Repair (${damagedItems.length})` : tab}
-              </button>
-            ))}
+            {(['bag', 'craft', 'blueprints', 'repair', 'history'] as const).map((tab) => {
+              const isLockedTab = isCraftingLocked && (tab === 'craft' || tab === 'blueprints');
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setRightPanelTab(tab)}
+                  className={`flex items-center justify-center gap-1 flex-1 py-2.5 px-1 text-[10px] font-bold font-display uppercase tracking-widest transition-all text-center border-t-2 border-l-2 border-r-2 ${
+                    rightPanelTab === tab 
+                      ? 'bg-game-wood border-game-gold text-game-gold shadow-[0_-2px_5px_rgba(229,193,88,0.1)] translate-y-[2px]' 
+                      : 'bg-zinc-950/20 border-transparent text-zinc-500 hover:text-game-gold'
+                  }`}
+                >
+                  <span>{tab === 'bag' ? 'Backpack Bag' : tab === 'craft' ? 'Crafting' : tab === 'repair' ? `Repair (${damagedItems.length})` : tab}</span>
+                  {isLockedTab && <Lock className="h-3 w-3 text-zinc-650" />}
+                </button>
+              );
+            })}
           </div>
 
           {/* Tab 1: Backpack Bag panel */}
@@ -647,6 +655,25 @@ export default function InventoryPage() {
 
           {/* Tab 2: Crafting Center panel */}
           {rightPanelTab === 'craft' && (
+            isCraftingLocked ? (
+              <div className="rpg-panel-stone p-12 text-center flex flex-col items-center justify-center gap-4">
+                <div className="rpg-rivet top-1 left-1" />
+                <div className="rpg-rivet top-1 right-1" />
+                <div className="rpg-rivet bottom-1 left-1" />
+                <div className="rpg-rivet bottom-1 right-1" />
+                <div className="h-14 w-14 border border-zinc-800 rounded-full flex items-center justify-center bg-zinc-950 text-zinc-650 shadow-inner">
+                  <Lock className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold font-display text-zinc-400 uppercase tracking-widest">
+                    Crafting Sealed
+                  </h3>
+                  <p className="text-xs text-zinc-500 font-serif mt-1.5 max-w-xs mx-auto">
+                    Blacksmith forges are currently locked. Reach Commander Level 8 to unlock weapon crafting and blueprint smelting recipes.
+                  </p>
+                </div>
+              </div>
+            ) : (
             <div className="rpg-panel-stone p-6 rounded-none flex flex-col gap-6 text-left border-none shadow-xl relative">
               <div className="rpg-rivet top-1 left-1" />
               <div className="rpg-rivet top-1 right-1" />
@@ -724,10 +751,29 @@ export default function InventoryPage() {
                 })}
               </div>
             </div>
-          )}
+          ))}
 
           {/* Tab 3: Blueprints Library panel */}
           {rightPanelTab === 'blueprints' && (
+            isCraftingLocked ? (
+              <div className="rpg-panel-stone p-12 text-center flex flex-col items-center justify-center gap-4">
+                <div className="rpg-rivet top-1 left-1" />
+                <div className="rpg-rivet top-1 right-1" />
+                <div className="rpg-rivet bottom-1 left-1" />
+                <div className="rpg-rivet bottom-1 right-1" />
+                <div className="h-14 w-14 border border-zinc-800 rounded-full flex items-center justify-center bg-zinc-950 text-zinc-650 shadow-inner">
+                  <Lock className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold font-display text-zinc-400 uppercase tracking-widest">
+                    Blueprints Sealed
+                  </h3>
+                  <p className="text-xs text-zinc-550 font-serif mt-1.5 max-w-xs mx-auto">
+                    Weapon and gear blueprints are locked. Reach Commander Level 8 to unlock this panel.
+                  </p>
+                </div>
+              </div>
+            ) : (
             <div className="rpg-panel-stone p-6 rounded-none flex flex-col gap-4 text-left border-none shadow-xl relative">
               <div className="rpg-rivet top-1 left-1" />
               <div className="rpg-rivet top-1 right-1" />
@@ -749,7 +795,7 @@ export default function InventoryPage() {
                       <div key={bp.recipe_id} className="p-3 bg-zinc-950/60 border border-zinc-900 flex justify-between items-center text-xs">
                         <div className="flex flex-col">
                           <span className="font-bold text-zinc-200 font-display tracking-wide">{temp?.name || 'Special Recipe'}</span>
-                          <span className="text-[10px] text-zinc-500 font-serif mt-0.5">Unlocked: {new Date(bp.unlocked_at).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-zinc-550 font-serif mt-0.5">Unlocked: {new Date(bp.unlocked_at).toLocaleDateString()}</span>
                         </div>
                         <span className="px-2 py-0.5 border border-game-gold/30 bg-zinc-950 text-game-gold font-bold font-display text-[9px] uppercase tracking-wider">
                           Unlocked
@@ -760,7 +806,7 @@ export default function InventoryPage() {
                 </div>
               )}
             </div>
-          )}
+          ))}
 
           {/* Tab 4: Repair Station panel */}
           {rightPanelTab === 'repair' && (

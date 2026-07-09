@@ -39,6 +39,7 @@ import {
   SkipForward,
   Volume2,
   VolumeX,
+  Lock,
 } from 'lucide-react';
 import { useMusic, TRACKS } from '../../hooks/useMusic';
 import { useSFX } from '../../hooks/useSFX';
@@ -128,29 +129,15 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
   const activeRegion = game.regions.find((r) => r.id === game.profile?.current_region_id);
   const activeCountry = game.countries.find((c) => c.id === activeRegion?.country_id);
 
+  const playerLevel = game.stats?.level || 1;
+
   const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'World Map', href: '/map', icon: Map },
-    { name: 'Resource Gathering', href: '/gathering', icon: Pickaxe },
-    { name: 'Backpack Inventory', href: '/inventory', icon: Boxes },
-    { name: 'Activity History', href: '/history', icon: History },
-    { name: 'Industrial Hub', href: '/industrial', icon: Factory },
-    { name: 'Global Marketplace', href: '/marketplace', icon: Scale },
-    { name: 'Combat Zone', href: '/combat', icon: Swords },
-    { name: 'World Dynamics', href: '/world', icon: Globe },
-    { name: 'Nations & Politics', href: '/politics', icon: Landmark },
-    { name: 'Warfare & Logistics', href: '/warfare', icon: Flame },
-    { name: 'Community Hub', href: '/community', icon: Users },
-    { name: 'Aegis Messenger', href: '/messenger', icon: MessageSquare },
-    { name: 'Inbox Mailbox', href: '/mail', icon: Mail },
-    { name: 'Contracts Board', href: '/contracts', icon: FileText },
-    { name: 'Press Newspaper', href: '/newspaper', icon: BookOpen },
-    { name: 'Events Calendar', href: '/calendar', icon: Calendar },
-    { name: 'Quests Log', href: '/quests', icon: Compass },
-    { name: 'Seasons Portal', href: '/seasons', icon: Trophy },
-    { name: 'Companion App', href: '/companion', icon: Smartphone },
-    { name: 'Developer Center', href: '/developer', icon: Code },
-    { name: 'GM Admin Console', href: '/admin', icon: Shield },
+    { name: 'Home', href: '/dashboard', icon: LayoutDashboard, requiredLevel: 1 },
+    { name: 'Explore', href: '/explore', icon: Map, requiredLevel: 1 },
+    { name: 'Combat Arena', href: '/combat', icon: Swords, requiredLevel: 1 },
+    { name: 'Inventory', href: '/inventory', icon: Boxes, requiredLevel: 1 },
+    { name: 'Kingdom Hub', href: '/kingdom', icon: Landmark, requiredLevel: 5 },
+    { name: 'Commander', href: '/commander', icon: UserIcon, requiredLevel: 1 },
   ];
 
   return (
@@ -197,7 +184,29 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
           <nav className="flex-1 px-3.5 py-4 flex flex-col gap-1.5 overflow-y-auto relative z-10">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href;
+              const isLocked = playerLevel < item.requiredLevel;
+              const isActive = pathname === item.href && !isLocked;
+
+              if (isLocked) {
+                return (
+                  <div
+                    key={item.href}
+                    onClick={() => {
+                      sfx.playError();
+                      triggerFloatingText(`Requires Level ${item.requiredLevel}!`, 'text-red-500');
+                    }}
+                    className="flex items-center justify-between px-3.5 py-2 text-xs font-bold font-display uppercase tracking-wider border-2 border-transparent text-zinc-600 cursor-not-allowed select-none bg-zinc-900/5 hover:bg-zinc-900/10 transition-all rounded-none"
+                    title={`Unlocks at Commander Level ${item.requiredLevel}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className="h-4.5 w-4.5 text-zinc-700" />
+                      <span>{item.name}</span>
+                    </div>
+                    <Lock className="h-3.5 w-3.5 text-zinc-700" />
+                  </div>
+                );
+              }
+
               return (
                 <Link
                   key={item.href}
@@ -217,6 +226,43 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
                 </Link>
               );
             })}
+
+            {/* GM Tools if Admin */}
+            {(game.profile?.role === 'super_admin' || game.profile?.role === 'game_master') && (
+              <div className="mt-4 pt-4 border-t-2 border-game-gold/15 flex flex-col gap-1.5">
+                <span className="px-3.5 text-[9px] font-bold font-display text-zinc-500 uppercase tracking-widest">GM Console</span>
+                <Link
+                  href="/admin"
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    sfx.playClick();
+                  }}
+                  className={`flex items-center gap-3 px-3.5 py-2 text-[10px] font-bold font-display uppercase tracking-wider border-2 transition-all duration-100 ${
+                    pathname === '/admin'
+                      ? 'border-red-900 bg-red-950/20 text-red-400'
+                      : 'border-transparent text-zinc-500 hover:text-red-400 hover:bg-red-950/10'
+                  }`}
+                >
+                  <Shield className="h-4 w-4" />
+                  <span>GM Admin</span>
+                </Link>
+                <Link
+                  href="/developer"
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    sfx.playClick();
+                  }}
+                  className={`flex items-center gap-3 px-3.5 py-2 text-[10px] font-bold font-display uppercase tracking-wider border-2 transition-all duration-100 ${
+                    pathname === '/developer'
+                      ? 'border-amber-900 bg-amber-950/20 text-amber-400'
+                      : 'border-transparent text-zinc-500 hover:text-amber-400 hover:bg-amber-950/10'
+                  }`}
+                >
+                  <Code className="h-4 w-4" />
+                  <span>Dev Center</span>
+                </Link>
+              </div>
+            )}
           </nav>
 
           {/* Sidebar Footer */}

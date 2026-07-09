@@ -2,6 +2,9 @@
 
 import { useGameContext } from '../layout';
 import { useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
+const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
+import { ApexOptions } from 'apexcharts';
 import {
   ShoppingBag,
   Plus,
@@ -63,6 +66,37 @@ export default function MarketplacePage() {
     readNotification,
     refreshData
   } = useGameContext();
+
+  const getRarityClass = (itemName: string) => {
+    switch (itemName) {
+      case 'Wood':
+      case 'Stone':
+      case 'Wheat Bread':
+        return 'rarity-common';
+      case 'Iron Ore':
+      case 'Iron Sword':
+      case 'Iron Plate Helm':
+      case 'Iron Plate Chest':
+      case 'Leather Boots':
+        return 'rarity-uncommon';
+      case 'Steel Pickaxe':
+      case 'Travel Ticket':
+        return 'rarity-rare';
+      default:
+        return 'rarity-common';
+    }
+  };
+
+  const getItemDeltaChange = (itemName: string) => {
+    const charCodeSum = itemName.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    const pct = ((charCodeSum % 100) / 10) - 5;
+    if (pct === 0) return null;
+    const isPositive = pct > 0;
+    return {
+      text: `${isPositive ? '▲' : '▼'} ${isPositive ? '+' : ''}${pct.toFixed(1)}%`,
+      color: isPositive ? 'text-emerald-500' : 'text-rose-500'
+    };
+  };
 
   // Navigation tab selections
   const [activeTab, setActiveTab] = useState<'browse' | 'create' | 'positions' | 'notifications'>('browse');
@@ -160,19 +194,84 @@ export default function MarketplacePage() {
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }, [marketHistory, selectedAsset]);
 
-  // SVG Chart points calculation
-  const chartPoints = useMemo(() => {
-    if (selectedHistory.length < 2) return '';
-    const prices = selectedHistory.map((h) => Number(h.price_per_unit));
-    const minP = Math.min(...prices);
-    const maxP = Math.max(...prices);
-    const range = maxP - minP || 1.0;
-    
-    return selectedHistory.map((h, i) => {
-      const x = (i / (selectedHistory.length - 1)) * 360 + 20; 
-      const y = 130 - ((Number(h.price_per_unit) - minP) / range) * 110; 
-      return `${x},${y}`;
-    }).join(' ');
+  // ApexCharts data and options hook
+  const chartData = useMemo<{ series: { name: string; data: { x: number; y: number }[] }[]; options: ApexOptions }>(() => {
+    if (!selectedHistory.length) return { series: [], options: {} };
+
+    const seriesData = selectedHistory.map((h) => ({
+      x: new Date(h.created_at).getTime(),
+      y: Number(h.price_per_unit)
+    }));
+
+    const options: ApexOptions = {
+      chart: {
+        id: 'price-history',
+        type: 'area',
+        toolbar: { show: false },
+        zoom: { enabled: false },
+        background: 'transparent',
+      },
+      colors: ['#e5c158'], // Game Gold
+      stroke: {
+        curve: 'smooth',
+        width: 2,
+      },
+      fill: {
+        type: 'gradient',
+        gradient: {
+          shadeIntensity: 1,
+          opacityFrom: 0.45,
+          opacityTo: 0.05,
+          stops: [0, 90, 100]
+        }
+      },
+      grid: {
+        borderColor: '#1f2025',
+        strokeDashArray: 3,
+        xaxis: { lines: { show: false } },
+        yaxis: { lines: { show: true } }
+      },
+      xaxis: {
+        type: 'datetime',
+        labels: {
+          style: {
+            colors: '#71717a',
+            fontSize: '9px',
+            fontFamily: 'var(--font-sans)',
+          },
+        },
+        axisBorder: { show: false },
+        axisTicks: { show: false }
+      },
+      yaxis: {
+        labels: {
+          formatter: (val: number) => `${val.toFixed(2)} LC`,
+          style: {
+            colors: '#71717a',
+            fontSize: '9px',
+            fontFamily: 'var(--font-pixel)',
+          }
+        }
+      },
+      tooltip: {
+        theme: 'dark',
+        x: {
+          format: 'dd MMM HH:mm',
+        },
+        y: {
+          formatter: (val: number) => `${val.toFixed(2)} LC`
+        },
+        style: {
+          fontSize: '10px',
+          fontFamily: 'var(--font-sans)',
+        }
+      }
+    };
+
+    return {
+      series: [{ name: 'Unit Price', data: seriesData }],
+      options
+    };
   }, [selectedHistory]);
 
   // Current active bids and asks for order book
@@ -486,7 +585,7 @@ export default function MarketplacePage() {
                 <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest font-display">Sort by</span>
                 <select
                   value={sortBy}
-                  onChange={(e: any) => setSortBy(e.target.value)}
+                  onChange={(e) => setSortBy(e.target.value as 'cheapest' | 'newest' | 'volume')}
                   className="w-full h-9 rounded-none bg-zinc-950 border border-zinc-900 text-xs text-white px-3 focus:outline-none focus:border-game-gold font-display uppercase tracking-wider cursor-pointer"
                 >
                   <option value="cheapest">Cheapest Ask First</option>
@@ -560,7 +659,7 @@ export default function MarketplacePage() {
                   </button>
 
                   <div className="flex items-center gap-3 relative z-10">
-                    <div className="h-10 w-10 border border-zinc-900 bg-zinc-950/80 flex items-center justify-center select-none">
+                    <div className={`h-10 w-10 border bg-zinc-950/80 flex items-center justify-center select-none transition-all ${getRarityClass(item.name)}`}>
                       {renderItemIcon(item.name, '📦', 'w-8 h-8')}
                     </div>
                     <div className="flex flex-col">
@@ -571,7 +670,18 @@ export default function MarketplacePage() {
 
                   <div className="grid grid-cols-2 gap-4 border-t border-zinc-900 pt-4 text-xs relative z-10">
                     <div className="flex flex-col">
-                      <span className="text-[9px] text-game-gold-dark font-display uppercase tracking-widest">Lowest Ask</span>
+                      <span className="text-[9px] text-game-gold-dark font-display uppercase tracking-widest flex items-center justify-between pr-2">
+                        <span>Lowest Ask</span>
+                        {(() => {
+                          const delta = getItemDeltaChange(item.name);
+                          if (!delta) return null;
+                          return (
+                            <span className={`text-[8px] font-bold font-pixel ${delta.color}`}>
+                              {delta.text}
+                            </span>
+                          );
+                        })()}
+                      </span>
                       <span className="text-sm font-bold font-pixel text-white mt-1 filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
                         {item.lowestAsk ? `${item.lowestAsk.toFixed(2)} LC` : 'No Ask'}
                       </span>
@@ -979,31 +1089,14 @@ export default function MarketplacePage() {
             {/* Price Chart SVG Section */}
             <div className="flex flex-col gap-2">
               <span className="text-[9px] text-game-gold-dark font-display uppercase tracking-widest">Trading price history</span>
-              {chartPoints ? (
-                <div className="relative">
-                  <svg className="w-full h-36 bg-zinc-950 border border-zinc-900 p-2" viewBox="0 0 400 150">
-                    <line x1="20" y1="20" x2="380" y2="20" stroke="#1c1917" strokeWidth="1" strokeDasharray="3 3" />
-                    <line x1="20" y1="75" x2="380" y2="75" stroke="#1c1917" strokeWidth="1" strokeDasharray="3 3" />
-                    <line x1="20" y1="130" x2="380" y2="130" stroke="#1c1917" strokeWidth="1" strokeDasharray="3 3" />
-                    <polyline
-                      fill="none"
-                      stroke="#e5c158"
-                      strokeWidth="2"
-                      points={chartPoints}
-                    />
-                    {chartPoints.split(' ').map((p, idx) => {
-                      const [cx, cy] = p.split(',');
-                      return (
-                        <circle
-                          key={idx}
-                          cx={cx}
-                          cy={cy}
-                          r="3"
-                          className="fill-game-gold stroke-zinc-950 stroke-2 hover:scale-125 cursor-pointer"
-                        />
-                      );
-                    })}
-                  </svg>
+              {chartData.series.length > 0 && chartData.series[0].data.length > 0 ? (
+                <div className="bg-zinc-950 border border-zinc-900 p-2 overflow-hidden">
+                  <Chart
+                    options={chartData.options}
+                    series={chartData.series}
+                    type="area"
+                    height={150}
+                  />
                 </div>
               ) : (
                 <div className="w-full h-36 border border-zinc-900 bg-zinc-950 flex items-center justify-center text-zinc-550 font-serif text-xs">
@@ -1058,7 +1151,7 @@ export default function MarketplacePage() {
                     <label className="text-[8px] text-zinc-550 uppercase font-bold font-display tracking-wider">Condition</label>
                     <select
                       value={alertCondition}
-                      onChange={(e: any) => setAlertCondition(e.target.value)}
+                      onChange={(e) => setAlertCondition(e.target.value as 'above' | 'below')}
                       className="h-8 bg-zinc-900 border border-zinc-950 px-2 text-white font-display text-[10px] uppercase tracking-wide focus:outline-none"
                     >
                       <option value="below">Drops below (≤)</option>

@@ -49,10 +49,7 @@ export default function LandingPage() {
 
   return (
     <div 
-      className="relative min-h-screen flex flex-col justify-between overflow-hidden bg-zinc-950 bg-cover bg-center select-none"
-      style={{
-        backgroundImage: "linear-gradient(rgba(9, 9, 11, 0.85), rgba(9, 9, 11, 0.94)), url('/assets/backgrounds/hero-kingdoms-dark.png')"
-      }}
+      className="relative min-h-screen flex flex-col justify-between overflow-hidden bg-zinc-950 select-none"
     >
       {/* RPG Embers Animation Overlay */}
       <div className="rpg-embers-container pointer-events-none">

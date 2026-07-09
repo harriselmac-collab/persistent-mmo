@@ -1,240 +1,268 @@
 'use client';
 
 import { useGameContext } from '../layout';
-import { Sparkles, Calendar, BookOpen, AlertCircle, Scale, Coins } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { gameRepository } from '../../../services/repository/provider';
+import { useRouter } from 'next/navigation';
+import { 
+  Sparkles, Compass, AlertCircle, Coins, Flame, User, Play, ChevronRight, Landmark, Newspaper, Zap
+} from 'lucide-react';
 
-export default function DashboardPage() {
-  const { profile, stats, playerResources, resources, auditLogs, regions, countries, experienceThresholds } = useGameContext();
+export default function HomePage() {
+  const router = useRouter();
+  const { 
+    profile, 
+    stats, 
+    currencies, 
+    playerQuests, 
+    startQuest, 
+    updateQuestProgress, 
+    claimEnergy,
+    refreshData,
+    actionLoading
+  } = useGameContext();
 
-  const activeRegion = regions.find((r) => r.id === profile?.current_region_id);
-  const activeCountry = countries.find((c) => c.id === activeRegion?.country_id);
-  const citizenshipCountry = countries.find((c) => c.id === profile?.citizenship_country_id);
+  const [staticQuests, setStaticQuests] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  // Experience calculations from DB thresholds table
-  const threshold = experienceThresholds.find((t) => t.level === stats?.level);
-  const nextLevelExp = threshold?.required_experience || ((stats?.level || 1) * (stats?.level || 1) * 100);
-  const expPercentage = stats ? Math.min(100, Math.round((stats.experience / nextLevelExp) * 100)) : 0;
+  useEffect(() => {
+    const loadQuests = async () => {
+      try {
+        const qList = await gameRepository.getQuests();
+        setStaticQuests(qList);
+      } catch (err) {
+        console.error('Failed to load static quests:', err);
+      }
+    };
+    loadQuests();
+  }, []);
 
-  // Calculate cargo statistics
-  const cargoCount = playerResources.reduce((sum, item) => sum + item.quantity, 0);
-  const cargoWeight = playerResources.reduce((sum, item) => {
-    const res = resources.find((r) => r.id === item.resource_id);
-    return sum + (item.quantity * (res?.weight || 0.10));
-  }, 0);
-  const cargoValue = playerResources.reduce((sum, item) => {
-    const res = resources.find((r) => r.id === item.resource_id);
-    return sum + (item.quantity * (res?.base_value || 1.0));
-  }, 0);
+  const showStatus = (text: string, ok: boolean) => {
+    if (ok) {
+      setSuccess(text);
+      setError(null);
+      setTimeout(() => setSuccess(null), 3000);
+    } else {
+      setError(text);
+      setSuccess(null);
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const handleStartQuest = async (questId: number) => {
+    const res = await startQuest(questId);
+    if (res.success) {
+      showStatus('Story adventure accepted! View your target objective.', true);
+      refreshData();
+    } else {
+      showStatus(res.error || 'Failed to start quest.', false);
+    }
+  };
+
+  const handleSimulateQuest = async (questId: number, current: number, required: number) => {
+    const nextVal = current + 1;
+    const res = await updateQuestProgress(questId, { current: nextVal, required });
+    if (res.success) {
+      if (nextVal >= required) {
+        showStatus('Adventure completed! Quest rewards disbursed into cargo hold.', true);
+      } else {
+        showStatus(`Objective updated: ${nextVal} / ${required}`, true);
+      }
+      refreshData();
+    } else {
+      showStatus(res.error || 'Failed to update progress.', false);
+    }
+  };
+
+  const activeQuest = playerQuests.find(q => q.status === 'active');
+  const finishedQuestsCount = playerQuests.filter(q => q.status === 'completed').length;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 text-left">
       
-      {/* Top Banner */}
+      {/* Dynamic Alerts */}
+      {error && (
+        <div className="px-4 py-3 border-l-4 border-red-600 bg-red-950/30 text-red-400 text-xs font-bold font-display uppercase tracking-widest flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div className="px-4 py-3 border-l-4 border-game-emerald bg-emerald-950/30 text-emerald-400 text-xs font-bold font-display uppercase tracking-widest flex items-center gap-2">
+          <Sparkles className="h-4 w-4 shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      {/* Main Hero Banner */}
       <div className="w-full h-44 border-2 border-game-gold relative overflow-hidden shadow-2xl flex items-center justify-center">
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/assets/backgrounds/hero-kingdoms-dark.png')" }} />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0f] via-[#0d0d0f]/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0f] via-transparent to-transparent" />
         <div className="relative z-10 text-center flex flex-col gap-1.5 p-4">
+          <span className="text-[9px] font-display text-game-gold tracking-[0.35em] uppercase drop-shadow-md">Persistent Sandbox RPG</span>
           <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-game-gold tracking-widest uppercase filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
             Aegis Kingdoms
           </h1>
           <p className="text-zinc-300 text-[10px] font-serif italic tracking-wide max-w-md mx-auto drop-shadow-md">
-            "Forge your legacy, trade raw commodities on the exchange, and conquer opposing kingdoms."
+            "Forge your legacy, extract raw commodities, and lead your armies to coordinate national conquest."
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      
-      {/* Column 1: Profile & Stats */}
-      <div className="lg:col-span-2 flex flex-col gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
         
-        {/* Profile Card */}
-        <div className="rpg-panel-stone p-6 rounded-none relative overflow-hidden flex flex-col gap-6 shadow-xl">
-          <div className="rpg-rivet top-1 left-1" />
-          <div className="rpg-rivet top-1 right-1" />
-          <div className="rpg-rivet bottom-1 left-1" />
-          <div className="rpg-rivet bottom-1 right-1" />
-
-          <div className="absolute right-0 top-0 h-40 w-40 bg-game-gold/5 rounded-full blur-3xl pointer-events-none" />
+        {/* Column 1: Main adventure objective */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
           
-          <div className="flex flex-col sm:flex-row items-center gap-5 relative z-10">
-            <div className="h-16 w-16 border-2 border-game-gold bg-game-wood text-game-gold flex items-center justify-center text-2xl font-display font-black shadow-lg shadow-black/60 select-none">
-              {profile?.username[0].toUpperCase()}
-            </div>
-            
-            <div className="text-center sm:text-left flex-1">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <h2 className="text-2xl font-bold font-display text-game-gold tracking-wide filter drop-shadow-[0_1.5px_2px_rgba(0,0,0,0.8)]">{profile?.username}</h2>
-                <span className="px-2.5 py-0.5 border border-game-gold/20 bg-zinc-950 text-[9px] font-bold uppercase tracking-widest text-game-gold w-fit mx-auto sm:mx-0">
-                  {profile?.role}
-                </span>
-              </div>
-              <p className="text-zinc-500 text-xs font-serif mt-1 flex items-center justify-center sm:justify-start gap-1">
-                <Calendar className="h-3.5 w-3.5" />
-                <span>Joined: {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'N/A'}</span>
-              </p>
-            </div>
-          </div>
+          {/* Objective Box */}
+          <div className="rpg-panel-stone p-6 rounded-none flex flex-col justify-between flex-1 relative shadow-xl min-h-[300px]">
+            <div className="rpg-rivet top-1 left-1" />
+            <div className="rpg-rivet top-1 right-1" />
+            <div className="rpg-rivet bottom-1 left-1" />
+            <div className="rpg-rivet bottom-1 right-1" />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t-2 border-game-gold/15 pt-6 relative z-10">
-            <div className="flex flex-col gap-1">
-              <span className="text-[9px] text-game-gold-dark font-display uppercase tracking-widest">Citizenship</span>
-              <span className="text-sm font-bold font-display text-zinc-200">{citizenshipCountry?.name || 'Genesis Land'}</span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[9px] text-game-gold-dark font-display uppercase tracking-widest">Physical Coordinates</span>
-              <span className="text-sm font-bold font-display text-zinc-200">
-                {activeRegion?.name}, {activeCountry?.name}
-              </span>
-            </div>
-          </div>
-        </div>
- 
-        {/* Hero Attributes & Traits */}
-        <div className="rpg-panel-stone p-6 rounded-none flex flex-col gap-4 relative shadow-lg">
-          <div className="rpg-rivet top-1 left-1" />
-          <div className="rpg-rivet top-1 right-1" />
-          <div className="rpg-rivet bottom-1 left-1" />
-          <div className="rpg-rivet bottom-1 right-1" />
+            <div className="relative z-10 flex flex-col gap-4">
+              <h2 className="text-sm font-bold font-display text-game-gold uppercase tracking-widest border-b border-game-gold/15 pb-2.5 flex items-center gap-2">
+                <Compass className="h-4.5 w-4.5" />
+                <span>Primary Objective</span>
+              </h2>
 
-          <h3 className="text-sm font-bold font-display text-game-gold uppercase tracking-widest relative z-10">Hero Attributes & Traits</h3>
-
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 relative z-10">
-            {/* Health / Vitality */}
-            <div className="p-3 bg-zinc-950/80 border border-zinc-900 shadow-inner flex flex-col items-center text-center rounded-none group hover:border-game-gold/30 transition-all">
-              <img src="/assets/traits/health.png" alt="Health" className="h-12 w-12 object-contain filter drop-shadow-md mb-2 group-hover:scale-105 transition-transform" />
-              <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest font-display">Health</span>
-              <span className="text-sm font-bold font-pixel text-white mt-1">{stats?.health || 100} / {stats?.max_health || 100}</span>
-            </div>
-
-            {/* Combat Power (Strength) */}
-            <div className="p-3 bg-zinc-950/80 border border-zinc-900 shadow-inner flex flex-col items-center text-center rounded-none group hover:border-game-gold/30 transition-all">
-              <img src="/assets/traits/strength.png" alt="Strength" className="h-12 w-12 object-contain filter drop-shadow-md mb-2 group-hover:scale-105 transition-transform" />
-              <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest font-display">Strength</span>
-              <span className="text-sm font-bold font-pixel text-white mt-1">{(stats?.strength || 10).toFixed(2)}</span>
-            </div>
-
-            {/* Harvesting Level (Work Skill) */}
-            <div className="p-3 bg-zinc-950/80 border border-zinc-900 shadow-inner flex flex-col items-center text-center rounded-none group hover:border-game-gold/30 transition-all">
-              <img src="/assets/traits/work_skill.png" alt="Work Skill" className="h-12 w-12 object-contain filter drop-shadow-md mb-2 group-hover:scale-105 transition-transform" />
-              <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest font-display">Harvesting</span>
-              <span className="text-sm font-bold font-pixel text-white mt-1">{(stats?.work_skill || 1).toFixed(2)}</span>
-            </div>
-
-            {/* Defense */}
-            <div className="p-3 bg-zinc-950/80 border border-zinc-900 shadow-inner flex flex-col items-center text-center rounded-none group hover:border-game-gold/30 transition-all">
-              <img src="/assets/traits/defense.png" alt="Defense" className="h-12 w-12 object-contain filter drop-shadow-md mb-2 group-hover:scale-105 transition-transform" />
-              <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest font-display">Defense</span>
-              <span className="text-sm font-bold font-pixel text-white mt-1">{(stats?.defense || 0).toFixed(2)}</span>
-            </div>
-
-            {/* Speed */}
-            <div className="p-3 bg-zinc-950/80 border border-zinc-900 shadow-inner flex flex-col items-center text-center rounded-none group hover:border-game-gold/30 transition-all col-span-2 sm:col-span-1">
-              <img src="/assets/traits/speed.png" alt="Speed" className="h-12 w-12 object-contain filter drop-shadow-md mb-2 group-hover:scale-105 transition-transform" />
-              <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest font-display">Speed</span>
-              <span className="text-sm font-bold font-pixel text-white mt-1">{(stats?.speed || 0).toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Cargo Summary Dashboard */}
-        <div className="rpg-panel-stone p-6 rounded-none flex flex-col gap-4 relative shadow-lg">
-          <div className="rpg-rivet top-1 left-1" />
-          <div className="rpg-rivet top-1 right-1" />
-          <div className="rpg-rivet bottom-1 left-1" />
-          <div className="rpg-rivet bottom-1 right-1" />
-
-          <h3 className="text-sm font-bold font-display text-game-gold uppercase tracking-widest relative z-10">Cargo Hold Overview</h3>
-
-          <div className="grid grid-cols-3 gap-4 relative z-10">
-            <div className="p-3 bg-zinc-950 border border-zinc-900 shadow-inner flex flex-col items-center">
-              <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest font-display">Total Cargo</span>
-              <span className="text-base font-bold font-pixel text-white mt-1">{cargoCount} items</span>
-            </div>
-            
-            <div className="p-3 bg-zinc-950 border border-zinc-900 shadow-inner flex flex-col items-center">
-              <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest font-display">Cargo Weight</span>
-              <span className="text-base font-bold font-pixel text-white mt-1 flex items-center gap-1">
-                <Scale className="h-4 w-4 text-zinc-600" />
-                <span>{cargoWeight.toFixed(1)} kg</span>
-              </span>
-            </div>
-
-            <div className="p-3 bg-zinc-950 border border-zinc-900 shadow-inner flex flex-col items-center">
-              <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest font-display">Market Value</span>
-              <span className="text-base font-bold font-pixel text-game-emerald mt-1 flex items-center gap-1">
-                <Coins className="h-4 w-4 text-game-gold-dark" />
-                <span>{cargoValue.toFixed(1)} LC</span>
-              </span>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Column 2: Recent Logs Feed - Redesigned as Aged Parchment Scroll */}
-      <div className="rpg-panel-parchment p-6 rounded-none flex flex-col gap-4 h-full min-h-[400px] border-2 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-amber-950/20 pb-3">
-          <h3 className="text-sm font-bold font-display text-amber-950 flex items-center gap-2 uppercase tracking-widest">
-            <Sparkles className="h-4.5 w-4.5 text-amber-900" />
-            <span>Activity Feed</span>
-          </h3>
-          <span className="px-2 py-0.5 border border-amber-950/30 bg-amber-950/10 text-[8px] font-bold text-amber-950 tracking-widest uppercase">
-            Realtime
-          </span>
-        </div>
-
-        <div className="flex-1 overflow-y-auto flex flex-col gap-2 max-h-[460px] pr-1">
-          {auditLogs.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-amber-900/50 py-12">
-              <AlertCircle className="h-8 w-8 text-amber-900/30" />
-              <p className="text-xs font-serif">No entries recorded in terminal log.</p>
-            </div>
-          ) : (
-            auditLogs.map((log) => {
-              let text = log.action;
-              let detailText = '';
-              let isCost = false;
-              if (log.action === 'auth.signup') {
-                text = 'Registered brand new terminal account.';
-              } else if (log.action === 'region.travel') {
-                text = `Traveled from ${log.metadata.from} to ${log.metadata.to}`;
-                detailText = `Cost deducted: -${log.metadata.energy_cost} EP`;
-                isCost = true;
-              } else if (log.action === 'company.work') {
-                text = `Worked at ${log.metadata.company_name}`;
-                detailText = `Earned +${log.metadata.wage_earned} LC (Wage)`;
-              } else if (log.action === 'combat.train') {
-                text = `Completed physical military training session.`;
-                detailText = `Gained +${log.metadata.strength_gained} Strength`;
-              } else if (log.action === 'combat.fight') {
-                text = `Hit the wall in Regional Conflict.`;
-                detailText = `Contributed +${Math.round(log.metadata.damage_dealt)} Combat Score`;
-                isCost = true;
-              } else if (log.action === 'resource.gather') {
-                text = `Harvested resource: ${log.metadata.resource_name}`;
-                detailText = `Acquired +${log.metadata.quantity} units, +${log.metadata.experience_earned} XP`;
-              }
-
-              return (
-                <div key={log.id} className="p-3 bg-amber-950/5 border-b border-amber-950/10 flex flex-col gap-0.5 hover:bg-amber-950/10 transition-colors">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-xs text-amber-950 font-serif leading-relaxed">{text}</span>
-                    <span className="text-[9px] text-amber-900/60 font-pixel tracking-wider">
-                      {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+              {activeQuest ? (
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <h3 className="text-base font-bold font-display text-zinc-100">{activeQuest.title}</h3>
+                    <p className="text-xs text-zinc-400 font-serif mt-1">{activeQuest.description}</p>
                   </div>
-                  {detailText && (
-                    <span className={`text-[10px] font-bold font-display ${isCost ? 'text-rose-800' : 'text-emerald-800'}`}>{detailText}</span>
-                  )}
+
+                  {(() => {
+                    const current = activeQuest.progress_json?.current || 0;
+                    const required = activeQuest.progress_json?.required || 1;
+                    const percent = Math.min((current / required) * 100, 100);
+
+                    return (
+                      <div className="flex flex-col gap-2 mt-2 bg-zinc-950 p-4 border border-zinc-900">
+                        <div className="flex justify-between text-[10px] font-pixel text-zinc-500">
+                          <span>Target Progress: {current} / {required}</span>
+                          <span>{percent.toFixed(0)}%</span>
+                        </div>
+                        <div className="w-full bg-zinc-900 border border-zinc-800 h-2">
+                          <div
+                            className="bg-game-gold h-full transition-all duration-350"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                        
+                        <div className="flex justify-end gap-3 mt-4 border-t border-zinc-900 pt-3">
+                          <button
+                            onClick={() => handleSimulateQuest(activeQuest.quest_id, current, required)}
+                            className="rpg-button px-5 py-2 text-[10px] tracking-widest font-bold"
+                          >
+                            Simulate Progress
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-              );
-            })
-          )}
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <div className="text-zinc-500 text-xs font-serif leading-relaxed">
+                    You have no active adventures currently. Select a quest from the chronicle scrolls below to set your next travel coordinates.
+                  </div>
+
+                  <div className="flex flex-col gap-2 mt-2">
+                    {staticQuests.filter(q => !playerQuests.some(pq => pq.quest_id === q.id)).slice(0, 2).map((quest) => (
+                      <div key={quest.id} className="bg-zinc-950 border border-zinc-900 p-3.5 flex justify-between items-center text-xs">
+                        <div>
+                          <h4 className="font-bold text-zinc-200">{quest.title}</h4>
+                          <p className="text-[10px] text-zinc-500 font-serif mt-0.5">{quest.description}</p>
+                        </div>
+                        <button
+                          onClick={() => handleStartQuest(quest.id)}
+                          className="rpg-button rpg-button-emerald px-3.5 py-1.5 text-[9px] tracking-widest shrink-0"
+                        >
+                          Accept
+                        </button>
+                      </div>
+                    ))}
+                    {staticQuests.filter(q => !playerQuests.some(pq => pq.quest_id === q.id)).length === 0 && (
+                      <p className="text-zinc-650 text-center py-4 font-serif text-[11px]">All story quests accepted or completed.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest text-center mt-6 border-t border-zinc-900/60 pt-3 relative z-10">
+              Completed Storyline Adventures: {finishedQuestsCount}
+            </div>
+          </div>
         </div>
+
+        {/* Column 2: Quick actions & News */}
+        <div className="lg:col-span-1 flex flex-col gap-6">
+          
+          {/* Quick actions panel */}
+          <div className="rpg-panel-stone p-5 rounded-none flex flex-col gap-4 relative shadow-lg">
+            <div className="rpg-rivet top-1 left-1" />
+            <div className="rpg-rivet top-1 right-1" />
+            <div className="rpg-rivet bottom-1 left-1" />
+            <div className="rpg-rivet bottom-1 right-1" />
+
+            <span className="text-[9px] text-game-gold-dark font-display uppercase tracking-widest font-bold">Quick Operations</span>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => router.push('/combat')}
+                className="rpg-button w-full h-11 text-[9px] tracking-widest flex items-center justify-between px-4 uppercase font-bold"
+              >
+                <span>Enter Combat Arena</span>
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              
+              <button
+                onClick={() => router.push('/explore')}
+                className="rpg-button w-full h-11 text-[9px] tracking-widest flex items-center justify-between px-4 uppercase font-bold"
+              >
+                <span>Explore Coordinates</span>
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Kingdom Gazeteer (Real-time news) */}
+          <div className="rpg-panel-stone p-5 rounded-none flex-1 flex flex-col gap-4 relative shadow-lg">
+            <div className="rpg-rivet top-1 left-1" />
+            <div className="rpg-rivet top-1 right-1" />
+            <div className="rpg-rivet bottom-1 left-1" />
+            <div className="rpg-rivet bottom-1 right-1" />
+
+            <h3 className="text-[9px] text-game-gold-dark font-display uppercase tracking-widest font-bold border-b border-zinc-800 pb-2 flex items-center gap-1.5">
+              <Newspaper className="h-4 w-4" />
+              <span>Kingdom Gazeteer</span>
+            </h3>
+
+            <div className="flex flex-col gap-3.5 text-xs text-left max-h-[160px] overflow-y-auto pr-1">
+              <div>
+                <span className="text-[8px] font-bold text-rose-500 uppercase tracking-widest font-display">Border Disputes</span>
+                <h4 className="font-bold text-zinc-300 mt-0.5">Ironhold Clans Stocking Longswords</h4>
+                <p className="text-[10px] text-zinc-500 font-serif leading-relaxed mt-0.5">
+                  Border skirmishes continue. Ironhold blacksmiths report record high sword productions.
+                </p>
+              </div>
+              <div className="border-t border-zinc-900 pt-3">
+                <span className="text-[8px] font-bold text-game-emerald uppercase tracking-widest font-display">Market Spikes</span>
+                <h4 className="font-bold text-zinc-300 mt-0.5">Grain Reserves Stabilizing</h4>
+                <p className="text-[10px] text-zinc-500 font-serif leading-relaxed mt-0.5">
+                  Domestic crop yields are solid. Market VAT revenues have increased by +12%.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+
       </div>
-      
     </div>
-  </div>
   );
 }

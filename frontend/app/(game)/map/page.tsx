@@ -3,6 +3,7 @@
 import { useGameContext } from '../layout';
 import { useState } from 'react';
 import { MapPin, Globe, Compass, Plane, AlertCircle, Sparkles, User, Cloud } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function MapPage() {
   const { profile, stats, regions, countries, inventory, travel, actionLoading, spawns, resources, claimTicket } = useGameContext();
@@ -130,8 +131,7 @@ export default function MapPage() {
         
         {/* Widescreen Board Frame (16:9 aspect-video) containing the 1:1 square map centered */}
         <div 
-          className="relative border-4 border-zinc-900 shadow-inner w-full overflow-hidden aspect-video select-none flex items-center justify-center bg-repeat bg-center"
-          style={{ backgroundImage: "url('/assets/textures/wood-walnut.png')", backgroundSize: '180px' }}
+          className="relative border-4 border-zinc-900 shadow-inner w-full overflow-hidden aspect-video select-none flex items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-950"
         >
           {/* Subtle vignette/shadow inside the wooden table border */}
           <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-transparent to-black/50 pointer-events-none z-10" />
@@ -140,21 +140,6 @@ export default function MapPage() {
           {/* Center 1:1 Square Map Box */}
           <div className="relative h-full aspect-square shadow-[0_0_35px_rgba(0,0,0,0.95)] z-20 border-l border-r border-zinc-900 bg-zinc-950">
             <img src="/assets/backgrounds/fantasy_world_map.png" alt="Aegis Kingdoms World Map" className="w-full h-full object-cover" />
-            
-            {/* Drifting Clouds Atmosphere */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.25] mix-blend-color-dodge z-10">
-              <div
-                className="absolute top-[10%] w-96 h-48 blur-2xl animate-cloud-drift-slow"
-                style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 70%)' }}
-              />
-              <div
-                className="absolute top-[50%] w-80 h-40 blur-2xl animate-cloud-drift-fast"
-                style={{
-                  backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 70%)',
-                  animationDelay: '-25s'
-                }}
-              />
-            </div>
 
             {/* Travel Route Connections Network */}
             <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
@@ -171,13 +156,16 @@ export default function MapPage() {
                   const end = positionMap[endId];
                   if (!start || !end) return null;
                   return (
-                    <line
+                    <motion.line
                       key={index}
                       x1={start.left}
                       y1={start.top}
                       x2={end.left}
                       y2={end.top}
                       className="stroke-game-gold/30 stroke-[1.5] animate-dash-travel"
+                      initial={{ pathLength: 0, opacity: 0 }}
+                      animate={{ pathLength: 1, opacity: 1 }}
+                      transition={{ duration: 1.2, ease: "easeOut", delay: index * 0.05 }}
                     />
                   );
                 });
@@ -191,7 +179,7 @@ export default function MapPage() {
                 const isCurrent = region.id === profile?.current_region_id;
                 
                 return (
-                  <button
+                  <motion.button
                     key={region.id}
                     onClick={() => handleTravel(region.id, region.name)}
                     className={`absolute w-7 h-7 -translate-x-1/2 -translate-y-1/2 rounded-full cursor-pointer group flex items-center justify-center transition-all duration-200 ${
@@ -201,10 +189,19 @@ export default function MapPage() {
                     }`}
                     style={{ top: coords.top, left: coords.left }}
                     title={`${region.name} (${isCurrent ? 'Current' : 'Travel'})`}
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: idx * 0.04, duration: 0.25 }}
+                    whileHover={{ scale: 1.25 }}
+                    whileTap={{ scale: 0.9 }}
                   >
                     <div className="relative flex items-center justify-center">
                       {isCurrent && (
-                        <span className="absolute w-6 h-6 rounded-full border border-game-gold animate-ping opacity-60 pointer-events-none" />
+                        <motion.span 
+                          className="absolute w-6 h-6 rounded-full border border-game-gold pointer-events-none" 
+                          animate={{ scale: [1, 2.2, 1], opacity: [0.6, 0, 0.6] }}
+                          transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
+                        />
                       )}
                       <span className={`w-2.5 h-2.5 rounded-full border border-black/40 shadow-sm transition-colors duration-200 ${
                         isCurrent 
@@ -217,7 +214,7 @@ export default function MapPage() {
                     <span className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-zinc-950 text-[9px] text-zinc-200 border border-zinc-850 px-2 py-1 uppercase font-display tracking-widest font-black whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-md z-30">
                       {region.name} {isCurrent ? '(Current)' : ''}
                     </span>
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
