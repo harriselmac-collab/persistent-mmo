@@ -91,6 +91,19 @@ export function useAuth() {
     setLoading(false);
   };
 
+  const signInWithOAuth = async (provider: 'google' | 'discord') => {
+    setLoading(true);
+    setError(null);
+    const { error: oauthError } = await authRepository.signInWithOAuth(provider);
+    if (oauthError) {
+      setError(oauthError.message);
+      setLoading(false);
+      return { success: false, error: oauthError.message };
+    }
+    // Auth state listener handles setting session details
+    return { success: true, error: null };
+  };
+
   return {
     userId,
     sessionUser,
@@ -99,6 +112,7 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
+    signInWithOAuth,
     isAuthenticated: !!userId,
   };
 }

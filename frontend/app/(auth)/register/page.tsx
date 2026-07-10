@@ -4,11 +4,14 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { User, Mail, KeyRound, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { Mail, Lock, User, KeyRound, AlertCircle, Loader2 } from 'lucide-react';
+import { useSFX } from '../../../hooks/useSFX';
+import { motion } from 'framer-motion';
 
 export default function RegisterPage() {
   const { signUp, userId } = useAuth();
   const router = useRouter();
+  const sfx = useSFX();
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -26,6 +29,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username || !email || !password || !inviteCode) {
+      sfx.playError();
       setError('Please fill in all fields.');
       return;
     }
@@ -38,10 +42,12 @@ export default function RegisterPage() {
       const codeRecord = invitesList.find((i: any) => i.invite_code === inviteCode.trim().toUpperCase());
       
       if (!codeRecord) {
+        sfx.playError();
         setError('Invalid Closed Alpha invite code. Please enter a valid registration key.');
         return;
       }
       if (codeRecord.is_used) {
+        sfx.playError();
         setError('Alpha invite code has already been used by another tester.');
         return;
       }
@@ -54,51 +60,68 @@ export default function RegisterPage() {
 
     // Client-side validations matching database constraints
     if (username.length < 3 || username.length > 30) {
+      sfx.playError();
       setError('Username must be between 3 and 30 characters.');
       return;
     }
     if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+      sfx.playError();
       setError('Username can only contain alphanumeric characters, hyphens, and underscores.');
       return;
     }
     if (password.length < 6) {
+      sfx.playError();
       setError('Password must be at least 6 characters.');
       return;
     }
 
     setLoading(true);
     setError(null);
+    sfx.playClick();
 
     const res = await signUp(username, email, password);
     if (!res.success) {
+      sfx.playError();
       setError(res.error || 'Registration failed.');
       setLoading(false);
+    } else {
+      sfx.playSuccess();
     }
   };
 
+  const handleHover = () => {
+    sfx.playClick();
+  };
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold font-display text-game-gold tracking-wide filter drop-shadow-[0_1.5px_3px_rgba(0,0,0,0.8)]">Create New Account</h2>
-        <p className="text-zinc-400 text-xs font-serif mt-1">Register a Closed Alpha citizen identity.</p>
-      </div>
-
-      <div className="rpg-divider -my-1" />
-
+    <motion.div 
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -15 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
+      className="flex flex-col gap-4 w-full mt-1"
+    >
+      {/* Alert Error Box */}
       {error && (
-        <div className="p-3 bg-red-950/40 border-2 border-red-800/60 rounded-none flex gap-2 items-start text-red-300 text-xs leading-normal font-serif">
+        <motion.div 
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="p-2.5 bg-red-950/30 border border-red-900/40 flex gap-2 items-start text-red-300 text-[10.5px] leading-normal font-sans"
+        >
           <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
           <span>{error}</span>
-        </div>
+        </motion.div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         {/* Closed Alpha Invite Code */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-bold font-display text-game-gold-dark uppercase tracking-widest">Alpha Invite Code</label>
+        <div className="flex flex-col gap-1">
+          <label className="text-[8.5px] font-bold font-serif text-[#b89030] uppercase tracking-widest">
+            Alpha Invite Code
+          </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
-              <KeyRound className="h-4 w-4" />
+            <div className="absolute inset-y-0 left-0 pl-1 flex items-center pointer-events-none text-zinc-650">
+              <KeyRound className="h-3.5 w-3.5" />
             </div>
             <input
               type="text"
@@ -106,94 +129,106 @@ export default function RegisterPage() {
               onChange={(e) => setInviteCode(e.target.value)}
               placeholder="e.g. AEGIS-ALPHA-01"
               disabled={loading}
-              className="w-full pl-10 pr-4 py-2.5 rpg-input rounded-none border-2 text-zinc-200 placeholder-zinc-700 text-sm"
+              className="w-full pl-8 pr-2 py-2 rpg-field-underline rounded-none text-zinc-100 placeholder-zinc-700 text-xs tracking-wide"
               required
             />
           </div>
         </div>
 
         {/* Username */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-bold font-display text-game-gold-dark uppercase tracking-widest">Username</label>
+        <div className="flex flex-col gap-1">
+          <label className="text-[8.5px] font-bold font-serif text-[#b89030] uppercase tracking-widest">
+            Username
+          </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
-              <User className="h-4 w-4" />
+            <div className="absolute inset-y-0 left-0 pl-1 flex items-center pointer-events-none text-zinc-650">
+              <User className="h-3.5 w-3.5" />
             </div>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. shadow_commander"
+              placeholder="Username"
               disabled={loading}
-              className="w-full pl-10 pr-4 py-2.5 rpg-input rounded-none border-2 text-zinc-200 placeholder-zinc-700 text-sm"
+              className="w-full pl-8 pr-2 py-2 rpg-field-underline rounded-none text-zinc-100 placeholder-zinc-700 text-xs tracking-wide"
               required
             />
           </div>
         </div>
 
-        {/* Email */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-bold font-display text-game-gold-dark uppercase tracking-widest">Email Address</label>
+        {/* Email Address */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[8.5px] font-bold font-serif text-[#b89030] uppercase tracking-widest">
+            Email Address
+          </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
-              <Mail className="h-4 w-4" />
+            <div className="absolute inset-y-0 left-0 pl-1 flex items-center pointer-events-none text-zinc-655">
+              <Mail className="h-3.5 w-3.5" />
             </div>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="recruit@empire.com"
+              placeholder="Email Address"
               disabled={loading}
-              className="w-full pl-10 pr-4 py-2.5 rpg-input rounded-none border-2 text-zinc-200 placeholder-zinc-700 text-sm"
+              className="w-full pl-8 pr-2 py-2 rpg-field-underline rounded-none text-zinc-100 placeholder-zinc-700 text-xs tracking-wide"
               required
             />
           </div>
         </div>
 
         {/* Password */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-bold font-display text-game-gold-dark uppercase tracking-widest">Password</label>
+        <div className="flex flex-col gap-1">
+          <label className="text-[8.5px] font-bold font-serif text-[#b89030] uppercase tracking-widest">
+            Password Key
+          </label>
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
-              <KeyRound className="h-4 w-4" />
+            <div className="absolute inset-y-0 left-0 pl-1 flex items-center pointer-events-none text-zinc-655">
+              <Lock className="h-3.5 w-3.5" />
             </div>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min 6 characters"
+              placeholder="Password Key (min 6 chars)"
               disabled={loading}
-              className="w-full pl-10 pr-4 py-2.5 rpg-input rounded-none border-2 text-zinc-200 placeholder-zinc-700 text-sm"
+              className="w-full pl-8 pr-2 py-2 rpg-field-underline rounded-none text-zinc-100 placeholder-zinc-700 text-xs tracking-wide"
               required
             />
           </div>
         </div>
 
-        {/* Submit */}
+        {/* Provision Account submit button */}
         <button
           type="submit"
           disabled={loading}
-          className="mt-3 w-full rpg-button h-11 text-sm tracking-widest rounded-none select-none"
+          onMouseEnter={handleHover}
+          className="mt-4 w-full rpg-button-royal h-11 text-[10.5px] tracking-[0.18em] rounded-none select-none flex items-center justify-center gap-2"
         >
           {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-white" />
+            <Loader2 className="h-4 w-4 animate-spin text-zinc-950" />
           ) : (
-            <span className="flex items-center gap-2">
-              <span>Provision Account</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </span>
+            <span>Provision Account</span>
           )}
         </button>
       </form>
 
-      <div className="rpg-divider -my-1" />
-
-      <div className="text-center text-xs text-zinc-500 font-serif pt-1">
-        Already registered?{' '}
-        <Link href="/login" className="text-game-gold hover:text-game-gold-dark transition-colors font-sans font-bold tracking-wider">
-          Sign In Here
-        </Link>
+      {/* Divider */}
+      <div className="relative flex py-1 items-center">
+        <div className="flex-grow border-t border-zinc-800"></div>
+        <span className="flex-shrink mx-3 text-[9px] font-serif uppercase tracking-widest text-zinc-600">or</span>
+        <div className="flex-grow border-t border-zinc-800"></div>
       </div>
-    </div>
+
+      {/* Secondary Button: Back to sign in */}
+      <Link
+        href="/login"
+        onMouseEnter={handleHover}
+        onClick={() => sfx.playClose()}
+        className="w-full rpg-button-steel h-10 text-[9.5px] tracking-widest rounded-none flex items-center justify-center gap-1.5"
+      >
+        <span>Back to Sign In</span>
+      </Link>
+    </motion.div>
   );
 }

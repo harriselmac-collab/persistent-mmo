@@ -10,4 +10,5 @@ export interface IAuthRepository {
   signOut(): Promise<{ error: Error | null }>;
   getSessionUser(): Promise<SessionUser | null>;
   onAuthStateChange(callback: (userId: string | null) => void): () => void;
+  signInWithOAuth(provider: 'google' | 'discord'): Promise<{ error: Error | null }>;
 }

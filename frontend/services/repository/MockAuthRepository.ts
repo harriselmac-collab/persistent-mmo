@@ -141,4 +141,31 @@ export class MockAuthRepository implements IAuthRepository {
       this.listeners = this.listeners.filter((listener) => listener !== callback);
     };
   }
+
+  async signInWithOAuth(provider: 'google' | 'discord'): Promise<{ error: Error | null }> {
+    if (typeof window === 'undefined') return { error: null };
+    
+    // Simulate successful login with a mock third-party account
+    const email = `${provider}-tester@aegismmo.dev`;
+    const username = `${provider}_lord`;
+    
+    // Find or create user
+    const users = this.getUsers();
+    let user = users.find(u => u.email === email);
+    if (!user) {
+      user = {
+        id: `${provider}-mock-id-${Math.random().toString(36).substring(2, 9)}`,
+        email,
+        username,
+        passwordHash: '',
+      };
+      users.push(user);
+      this.saveUsers(users);
+    }
+    
+    // Log user in
+    localStorage.setItem('mmo_auth_session', user.id);
+    this.notifyListeners(user.id);
+    return { error: null };
+  }
 }

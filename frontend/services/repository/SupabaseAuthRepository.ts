@@ -90,4 +90,18 @@ export class SupabaseAuthRepository implements IAuthRepository {
       subscription.unsubscribe();
     };
   }
+
+  async signInWithOAuth(provider: 'google' | 'discord'): Promise<{ error: Error | null }> {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined,
+        }
+      });
+      return { error };
+    } catch (err: any) {
+      return { error: err instanceof Error ? err : new Error(err?.message || 'OAuth failed') };
+    }
+  }
 }

@@ -132,12 +132,12 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
   const playerLevel = game.stats?.level || 1;
 
   const navItems = [
-    { name: 'Home', href: '/dashboard', icon: LayoutDashboard, requiredLevel: 1 },
-    { name: 'Explore', href: '/explore', icon: Map, requiredLevel: 1 },
-    { name: 'Combat Arena', href: '/combat', icon: Swords, requiredLevel: 1 },
-    { name: 'Inventory', href: '/inventory', icon: Boxes, requiredLevel: 1 },
-    { name: 'Kingdom Hub', href: '/kingdom', icon: Landmark, requiredLevel: 5 },
-    { name: 'Commander', href: '/commander', icon: UserIcon, requiredLevel: 1 },
+    { name: 'World', href: '/dashboard', icon: Map, requiredLevel: 1 },
+    { name: 'Kingdom', href: '/dashboard?tab=kingdom', icon: Landmark, requiredLevel: 1 },
+    { name: 'Army', href: '/dashboard?tab=army', icon: Swords, requiredLevel: 1 },
+    { name: 'Economy', href: '/dashboard?tab=economy', icon: Coins, requiredLevel: 1 },
+    { name: 'Quests', href: '/dashboard?tab=quests', icon: FileText, requiredLevel: 1 },
+    { name: 'Profile', href: '/dashboard?tab=profile', icon: UserIcon, requiredLevel: 1 },
   ];
 
   return (
@@ -344,31 +344,54 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
             </div>
 
             {/* Right Header: Balances & Stats */}
-            <div className="flex items-center gap-4 sm:gap-6">
+            <div className="flex items-center gap-3 sm:gap-5">
+              
+              {/* Sleek Energy (EP) Indicator */}
+              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 border border-zinc-800 bg-zinc-950/60 shadow-inner">
+                <Flame className="h-4 w-4 text-red-500 animate-pulse" />
+                <div className="flex flex-col text-left">
+                  <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest font-display">Energy</span>
+                  <span className="text-[10px] font-pixel text-red-400 leading-none mt-0.5">
+                    {game.stats?.energy || 0}/100 <span className="text-[8px] text-zinc-650 font-sans">EP</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Sleek Commander Level Indicator */}
+              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 border border-zinc-800 bg-zinc-950/60 shadow-inner">
+                <UserIcon className="h-4 w-4 text-indigo-400" />
+                <div className="flex flex-col text-left">
+                  <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest font-display">Rank</span>
+                  <span className="text-[10px] font-pixel text-indigo-450 leading-none mt-0.5">
+                    Lvl {game.stats?.level || 1}
+                  </span>
+                </div>
+              </div>
+
               {/* Currency: Local Balances */}
               <div className="flex flex-col items-end">
                 <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest font-display">Local Currency</span>
-                <span className="text-base font-bold text-game-emerald font-pixel tracking-wide filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
-                  {game.currencies?.local_currency_balance.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-[9px] text-zinc-600 font-sans">LC</span>
+                <span className="text-sm font-bold text-game-emerald font-pixel tracking-wide filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
+                  {game.currencies?.local_currency_balance.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-[9px] text-zinc-650 font-sans">LC</span>
                 </span>
               </div>
 
               {/* Currency: Gold Balances */}
-              <div className="flex flex-col items-end">
+              <div className="flex flex-col items-end border-l border-zinc-800/80 pl-3 sm:pl-4">
                 <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest font-display">Gold Reserves</span>
-                <span className="text-base font-bold text-game-gold font-pixel tracking-wide flex items-center gap-1 filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
+                <span className="text-sm font-bold text-game-gold font-pixel tracking-wide flex items-center gap-1 filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">
                   <Coins className="h-3.5 w-3.5 text-game-gold-dark" />
                   <span>{game.currencies?.gold.toFixed(4)}</span>
                 </span>
               </div>
 
               {/* Quick Profile Info */}
-              <div className="flex items-center gap-3 pl-4 border-l border-zinc-800/80">
+              <div className="flex items-center gap-3 pl-3 sm:pl-4 border-l border-zinc-800/80">
                 <div className="hidden md:flex flex-col text-right">
                   <span className="text-xs font-bold font-display text-zinc-200 tracking-wide">{game.profile?.username}</span>
                   <span className="text-[8px] font-bold text-game-gold-dark font-sans uppercase tracking-wider capitalize">{game.profile?.role}</span>
                 </div>
-                <div className="h-9 w-9 rounded-none border-2 border-game-gold bg-game-wood text-game-gold flex items-center justify-center font-bold font-display text-sm shadow-[0_0_8px_rgba(229,193,88,0.25)] select-none">
+                <div className="h-8 w-8 rounded-none border-2 border-game-gold bg-game-wood text-game-gold flex items-center justify-center font-bold font-display text-xs shadow-[0_0_8px_rgba(229,193,88,0.25)] select-none">
                   {game.profile?.username[0].toUpperCase()}
                 </div>
               </div>
@@ -376,88 +399,11 @@ export default function GameLayout({ children }: { children: React.ReactNode }) 
           </header>
 
           {/* Core Game Body */}
-          <main className="flex-1 overflow-y-auto bg-zinc-950 p-6 md:p-8 relative">
-            <div className={`${pathname === '/map' ? 'w-full max-w-none' : 'max-w-6xl mx-auto'} flex flex-col gap-6`}>
+          <main className={`flex-1 relative bg-zinc-950 ${pathname === '/dashboard' ? 'p-0 overflow-hidden' : 'p-6 md:p-8 overflow-y-auto'}`}>
+            <div className={`${pathname === '/dashboard' ? 'w-full h-full max-w-none' : 'max-w-6xl mx-auto'} flex flex-col h-full`}>
               
-              {/* Top Global Energy Bar / Experience Banner */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Energy Monitor - Skeuomorphic health pool */}
-                <div className="rpg-panel-stone p-4 rounded-none flex items-center justify-between gap-4 relative">
-                  <div className="rpg-rivet top-1 left-1" />
-                  <div className="rpg-rivet top-1 right-1" />
-                  <div className="rpg-rivet bottom-1 left-1" />
-                  <div className="rpg-rivet bottom-1 right-1" />
-
-                  <div className="flex items-center gap-3 relative z-10">
-                    <div className="p-2 bg-red-950/20 border border-red-900/40 text-red-500 rounded-none">
-                      <Flame className="h-4.5 w-4.5 animate-pulse" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[11px] font-bold font-display text-zinc-300 uppercase tracking-widest">Active Energy</span>
-                      <span className="text-[9px] font-serif text-zinc-500 mt-0.5">Regens +5 per 6m</span>
-                    </div>
-                  </div>
-                  <div className="flex-1 max-w-[200px] flex flex-col gap-1 items-end relative z-10">
-                    <div className="w-full rpg-progress-bar rounded-none">
-                      <div
-                        className="rpg-progress-fill bg-gradient-to-r from-red-700 to-orange-500 rounded-none"
-                        style={{ width: `${game.stats?.energy || 0}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold font-pixel text-red-500 tracking-wider rpg-stats-value">{game.stats?.energy || 0} / 100 EP</span>
-                      <button
-                        onClick={handleClaimEnergy}
-                        className="rpg-button px-2 py-0.5 text-[8px] tracking-widest shadow-sm rounded-none border border-game-gold ml-1 text-game-gold uppercase select-none"
-                      >
-                        Restore EP
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Level / EXP Monitor - Skeuomorphic mana pool */}
-                <div className="rpg-panel-stone p-4 rounded-none flex items-center justify-between gap-4 relative">
-                  <div className="rpg-rivet top-1 left-1" />
-                  <div className="rpg-rivet top-1 right-1" />
-                  <div className="rpg-rivet bottom-1 left-1" />
-                  <div className="rpg-rivet bottom-1 right-1" />
-
-                  <div className="flex items-center gap-3 relative z-10">
-                    <div className="p-2 bg-indigo-950/20 border border-indigo-900/40 text-indigo-400 rounded-none">
-                      <UserIcon className="h-4.5 w-4.5" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[11px] font-bold font-display text-zinc-300 uppercase tracking-widest">Commander Level</span>
-                      <span className="text-[9px] font-serif text-zinc-500 mt-0.5">Rank progression</span>
-                    </div>
-                  </div>
-                  
-                  {(() => {
-                    const level = game.stats?.level || 1;
-                    const exp = game.stats?.experience || 0;
-                    const nextLevelExp = level * level * 100;
-                    const pct = Math.min(100, Math.round((exp / nextLevelExp) * 100));
-                    return (
-                      <div className="flex-1 max-w-[200px] flex flex-col gap-1 items-end relative z-10">
-                        <div className="w-full rpg-progress-bar rounded-none">
-                          <div
-                            className="rpg-progress-fill bg-gradient-to-r from-blue-700 to-indigo-500 rounded-none"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-bold font-pixel text-indigo-400 tracking-wider rpg-stats-value">
-                          Lvl {level} ({exp} / {nextLevelExp} EXP - {pct}%)
-                        </span>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
               {/* Renders the sub page view */}
-              <div className="animate-card-slide relative z-10">{children}</div>
+              <div className="animate-card-slide relative z-10 w-full h-full flex-1 flex flex-col">{children}</div>
               
             </div>
           </main>
